@@ -99,7 +99,7 @@ class TestFullParseWorkflow:
         assert product_handler is not None
         message.product_type = product_handler.product_type
 
-        assert message.venue == "Smart Trade"
+        assert message.venue == "Smart Trade (LiquidityFX)"
         assert message.product_type == "Swap"
         assert message.get_value(64) == "20240117"  # Near leg
         assert message.get_value(193) == "20240415"  # Far leg

@@ -97,6 +97,8 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             193,  # SettlDate2
             192,  # OrderQty2
             126,  # ExpireTime
+            # LFX custom tags for FX Swaps
+            8004,  # SettlType2 (Far Leg Tenor)
         },
     ),
     # Legs (for multi-leg instruments like swaps)

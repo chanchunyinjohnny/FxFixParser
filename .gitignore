@@ -71,3 +71,6 @@ Thumbs.db
 
 # AI
 .claude/
+
+# Venue Specifications
+specifications/

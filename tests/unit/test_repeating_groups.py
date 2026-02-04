@@ -40,6 +40,18 @@ class TestRepeatingGroupDefinitions:
         assert group.name == "Related Symbols"
         assert 55 in group.member_tags  # Symbol
 
+    def test_related_sym_group_includes_lfx_swap_tags(self) -> None:
+        """Test that NoRelatedSym group includes LFX custom tags for swaps."""
+        group = get_group_definition(146)
+        assert group is not None
+        # Standard FX swap tags
+        assert 63 in group.member_tags   # SettlType (near leg)
+        assert 64 in group.member_tags   # SettlDate (near leg)
+        assert 192 in group.member_tags  # OrderQty2 (far leg quantity)
+        assert 193 in group.member_tags  # SettlDate2 (far leg date)
+        # LFX custom tag for far leg tenor
+        assert 8004 in group.member_tags  # SettlType2 (Far Leg Tenor)
+
     def test_unknown_group_returns_none(self) -> None:
         """Test that unknown count tag returns None."""
         group = get_group_definition(9999)

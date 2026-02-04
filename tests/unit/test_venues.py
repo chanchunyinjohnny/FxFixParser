@@ -25,8 +25,9 @@ class TestVenueHandlers:
         """Test Smart Trade handler properties."""
         handler = SmartTradeHandler()
 
-        assert handler.name == "Smart Trade"
+        assert handler.name == "Smart Trade (LiquidityFX)"
         assert "SMARTTRADE" in handler.sender_comp_ids
+        assert "LFX" in handler.sender_comp_ids
 
     def test_three_sixty_t_handler_properties(self) -> None:
         """Test 360T handler properties."""
@@ -97,7 +98,7 @@ class TestVenueRegistry:
 
         assert registry.get_by_sender_id("FXGO") is not None
         assert registry.get_by_sender_id("FXGO").name == "FXGO"
-        assert registry.get_by_sender_id("SMARTTRADE").name == "Smart Trade"
+        assert registry.get_by_sender_id("SMARTTRADE").name == "Smart Trade (LiquidityFX)"
         assert registry.get_by_sender_id("UNKNOWN") is None
 
     def test_default_registry(self, venue_registry: VenueRegistry) -> None:
@@ -106,7 +107,7 @@ class TestVenueRegistry:
         venue_names = [v.name for v in venues]
 
         assert "FXGO" in venue_names
-        assert "Smart Trade" in venue_names
+        assert "Smart Trade (LiquidityFX)" in venue_names
         assert "360T" in venue_names
 
     def test_venue_detection_from_message(self, venue_registry: VenueRegistry) -> None:
@@ -129,4 +130,4 @@ class TestVenueRegistry:
         st_msg = parser.parse(SWAP_MESSAGE)
         handler = venue_registry.get_by_sender_id(st_msg.sender_comp_id)
         assert handler is not None
-        assert handler.name == "Smart Trade"
+        assert handler.name == "Smart Trade (LiquidityFX)"
