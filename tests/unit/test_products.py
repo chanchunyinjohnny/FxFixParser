@@ -98,6 +98,19 @@ class TestProductDetection:
             )
             assert handler.detect(msg), f"Failed to detect forward for tenor {tenor}"
 
+    def test_detect_forward_by_md_entry_forward_points(self, parser: FixParser, product_registry: ProductRegistry) -> None:
+        """Test detecting a forward from MDEntryForwardPoints (tag 1027) presence."""
+        # Message without forward tenor in tag 63, but with tag 1027
+        msg = parser.parse(
+            "8=FIX.4.4|9=200|35=X|49=LFX_CORE|56=CLIENT|34=1|"
+            "52=20240115-10:30:00|55=EUR/USD|64=20260310|"
+            "268=1|279=1|269=0|270=1.180603|1026=1.17905|1027=0.001553|10=000|"
+        )
+        handler = product_registry.detect(msg)
+
+        assert handler is not None
+        assert handler.product_type == "Forward"
+
     def test_spot_tenors_not_detected_as_forward(self, parser: FixParser) -> None:
         """Test that spot tenors are NOT detected as forwards."""
         handler = ForwardHandler()

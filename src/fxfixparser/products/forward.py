@@ -37,7 +37,8 @@ class ForwardHandler(ProductHandler):
         - SecurityType (167) = FXFWD
         - SettlType (63) = 6 (Future) or B (BrokenDate)
         - SettlType (63) is a forward tenor code (e.g. M1, W2, Y1)
-        - Or presence of forward points (tag 195)
+        - Presence of forward points (tag 195 LastForwardPoints)
+        - Presence of MD entry forward points (tag 1027 MDEntryForwardPoints)
         """
         security_type = message.get_value(167)
         if security_type and security_type.upper() == "FXFWD":
@@ -51,8 +52,12 @@ class ForwardHandler(ProductHandler):
         if settl_type and FORWARD_TENOR_PATTERN.match(settl_type):
             return True
 
-        # Check for forward points
+        # Check for forward points (execution reports / quotes)
         if message.get_value(195):
+            return True
+
+        # Check for MD entry forward points (market data messages)
+        if message.get_value(1027):
             return True
 
         return False
