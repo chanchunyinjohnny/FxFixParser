@@ -198,7 +198,7 @@ def main() -> None:
 
                     st.dataframe(
                         table_data,
-                        use_container_width=True,
+                        width="stretch",
                         column_config=column_config,
                         hide_index=True,
                     )
@@ -229,7 +229,7 @@ def main() -> None:
                                 if entry_data:
                                     st.dataframe(
                                         entry_data,
-                                        use_container_width=True,
+                                        width="stretch",
                                         hide_index=True,
                                     )
 
@@ -293,7 +293,7 @@ def main() -> None:
                                 f"{trade.near_leg_offer_rate:.6f}" if trade.near_leg_offer_rate else (f"{trade.offer_price:.6f}" if trade.offer_price else "N/A"),
                             ],
                         }
-                        st.dataframe(near_data, use_container_width=True, hide_index=True)
+                        st.dataframe(near_data, width="stretch", hide_index=True)
 
                         st.markdown(f"##### {far_tenor} Leg")
                         far_data = {
@@ -307,7 +307,7 @@ def main() -> None:
                                 f"{trade.far_leg_offer_rate:.6f}" if trade.far_leg_offer_rate else "N/A",
                             ],
                         }
-                        st.dataframe(far_data, use_container_width=True, hide_index=True)
+                        st.dataframe(far_data, width="stretch", hide_index=True)
 
                         st.markdown("##### Swap Points")
                         swap_data = {
@@ -317,7 +317,7 @@ def main() -> None:
                                 f"{trade.offer_swap_points:+.6f}" if trade.offer_swap_points is not None else "N/A",
                             ],
                         }
-                        st.dataframe(swap_data, use_container_width=True, hide_index=True)
+                        st.dataframe(swap_data, width="stretch", hide_index=True)
 
                     else:
                         # Non-swap quote (spot/forward)
@@ -342,7 +342,7 @@ def main() -> None:
                                 f"{trade.bid_fwd_points:+.6f}" if trade.bid_fwd_points is not None else "N/A",
                                 f"{trade.offer_fwd_points:+.6f}" if trade.offer_fwd_points is not None else "N/A",
                             ]
-                        st.dataframe(quote_data, use_container_width=True, hide_index=True)
+                        st.dataframe(quote_data, width="stretch", hide_index=True)
 
                 else:
                     # Regular trade summary (Execution Report, etc.)
