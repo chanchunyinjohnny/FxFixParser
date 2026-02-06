@@ -118,6 +118,18 @@ class TestFXCustomTags:
         assert 201 in tag_numbers  # PutOrCall
         assert 202 in tag_numbers  # StrikePrice
 
+    def test_forward_md_entry_tags(self) -> None:
+        """Test forward market data entry tags 1026/1027 are defined."""
+        tag_numbers = {t.tag: t for t in FX_CUSTOM_TAGS}
+
+        assert 1026 in tag_numbers
+        assert tag_numbers[1026].name == "MDEntrySpotRate"
+        assert tag_numbers[1026].field_type == "PRICE"
+
+        assert 1027 in tag_numbers
+        assert tag_numbers[1027].name == "MDEntryForwardPoints"
+        assert tag_numbers[1027].field_type == "PRICEOFFSET"
+
 
 class TestSmartTradeVendorTags:
     """Tests for Smart Trade (LiquidityFX) vendor-specific tags."""

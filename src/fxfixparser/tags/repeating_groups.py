@@ -46,6 +46,9 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             15,   # Currency
             64,   # SettlDate
             40,   # OrdType
+            # Forward market data components
+            1026,  # MDEntrySpotRate
+            1027,  # MDEntryForwardPoints
             # Venue-specific custom tags commonly used in market data
             9122,  # VenueEntryTime
             9123,  # VenueEntryDate

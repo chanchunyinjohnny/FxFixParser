@@ -24,6 +24,13 @@ class TestRepeatingGroupDefinitions:
         assert 270 in group.member_tags  # MDEntryPx
         assert 271 in group.member_tags  # MDEntrySize
 
+    def test_market_data_group_includes_forward_tags(self) -> None:
+        """Test that NoMDEntries group includes forward-specific tags 1026/1027."""
+        group = get_group_definition(268)
+        assert group is not None
+        assert 1026 in group.member_tags  # MDEntrySpotRate
+        assert 1027 in group.member_tags  # MDEntryForwardPoints
+
     def test_party_ids_group_defined(self) -> None:
         """Test that NoPartyIDs group is defined."""
         group = get_group_definition(453)
@@ -64,6 +71,53 @@ class TestRepeatingGroupDefinitions:
         assert is_count_tag(146) is True  # NoRelatedSym
         assert is_count_tag(55) is False  # Symbol (not a count tag)
         assert is_count_tag(9999) is False  # Unknown tag
+
+
+class TestLFXForwardMDGrouping:
+    """Tests for MD entry grouping with LFX forward market data (tags 1026/1027)."""
+
+    def test_forward_md_entries_grouped_with_spot_rate_and_fwd_points(self) -> None:
+        """Test that tags 1026/1027 are grouped within MD entries, not split out."""
+        fields = [
+            FixField(tag=8, raw_value="FIX.4.4"),
+            FixField(tag=35, raw_value="X"),
+            FixField(tag=268, raw_value="2"),   # NoMDEntries = 2
+            FixField(tag=279, raw_value="1"),   # MDUpdateAction
+            FixField(tag=269, raw_value="0"),   # MDEntryType = Bid
+            FixField(tag=270, raw_value="1.180603"),  # MDEntryPx (all-in)
+            FixField(tag=290, raw_value="0"),   # MDEntryPositionNo
+            FixField(tag=1026, raw_value="1.17905"),  # MDEntrySpotRate
+            FixField(tag=1027, raw_value="0.001553"),  # MDEntryForwardPoints
+            FixField(tag=279, raw_value="1"),   # MDUpdateAction (entry 2)
+            FixField(tag=269, raw_value="1"),   # MDEntryType = Offer
+            FixField(tag=270, raw_value="1.180668"),
+            FixField(tag=290, raw_value="0"),
+            FixField(tag=1026, raw_value="1.17911"),
+            FixField(tag=1027, raw_value="0.001558"),
+            FixField(tag=10, raw_value="043"),
+        ]
+        message = FixMessage(fields=fields)
+
+        structured = message.get_structured_fields()
+        groups = [sf for sf in structured if sf.is_group]
+        assert len(groups) == 1
+
+        group = groups[0].group
+        assert group is not None
+        assert group.count == 2
+        assert len(group.entries) == 2
+
+        # Each entry should have 5 fields (279, 269, 270, 290, 1026, 1027)
+        # but 279 is the first tag so entry boundary is on 279
+        entry1 = group.entries[0]
+        entry1_tags = [f.tag for f in entry1.fields]
+        assert 1026 in entry1_tags, "Tag 1026 missing from entry 1"
+        assert 1027 in entry1_tags, "Tag 1027 missing from entry 1"
+
+        entry2 = group.entries[1]
+        entry2_tags = [f.tag for f in entry2.fields]
+        assert 1026 in entry2_tags, "Tag 1026 missing from entry 2"
+        assert 1027 in entry2_tags, "Tag 1027 missing from entry 2"
 
 
 class TestRepeatingGroupEntry:

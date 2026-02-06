@@ -106,8 +106,14 @@ FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
     FixFieldDefinition(8022, "OfferCurrency", "CURRENCY", "Currency of the offer quote."),
 
     # ============================================================================
-    # LFX Custom Tags - 1000 Range (Swap Points)
+    # LFX Custom Tags - 1000 Range (Market Data & Swap Points)
     # ============================================================================
+
+    # Forward market data components (per MD entry)
+    FixFieldDefinition(1026, "MDEntrySpotRate", "PRICE", "Underlying spot rate for this market data entry. In forward market data, this is the spot component of the all-in forward price (MDEntryPx)."),
+    FixFieldDefinition(1027, "MDEntryForwardPoints", "PRICEOFFSET", "Forward points for this market data entry. The difference between the all-in forward price (MDEntryPx) and the spot rate (MDEntrySpotRate)."),
+
+    # Swap points
     FixFieldDefinition(1065, "BidSwapPoints", "PRICEOFFSET", "FX Swap: Swap points of the bid entry (price difference between the far leg and the near one)."),
     FixFieldDefinition(1066, "OfferSwapPoints", "PRICEOFFSET", "FX Swap: Swap points of the offer entry (price difference between the far leg and the near one)."),
 
