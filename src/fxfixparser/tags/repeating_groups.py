@@ -46,6 +46,8 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             15,   # Currency
             64,   # SettlDate
             40,   # OrdType
+            # Size/quantity fields within MD entries
+            110,  # MinQty
             # Forward market data components
             1026,  # MDEntrySpotRate
             1027,  # MDEntryForwardPoints
