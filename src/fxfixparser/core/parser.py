@@ -118,7 +118,15 @@ class FixParser:
         return venue_dict
 
     def _normalize_delimiter(self, message: str) -> str:
-        """Convert pipe delimiters to SOH if configured."""
+        """Normalize message delimiters and strip extraneous whitespace.
+
+        FIX messages are single-line by definition. Newlines and carriage
+        returns may appear when messages are copied from logs or files with
+        line wrapping. These must be stripped so that tag=value pairs that
+        were split across lines are reassembled correctly.
+        """
+        # Strip newlines/carriage returns that break tag=value pairs
+        message = message.replace("\r\n", "").replace("\r", "").replace("\n", "")
         if self.config.allow_pipe_delimiter and self.PIPE in message:
             return message.replace(self.PIPE, self.SOH)
         return message
