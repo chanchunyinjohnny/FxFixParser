@@ -128,7 +128,7 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             618,  # LegSecurityDesc
             619,  # LegRatioQty
             620,  # LegSide
-            621,  # LegCurrency
+            621,  # EncodedLegSecurityDescLen
             622,  # LegPool
             623,  # LegDatedDate
             624,  # LegContractSettlMonth
@@ -140,12 +140,12 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             588,  # LegSettlDate
             637,  # LegLastPx
             654,  # LegRefID
-            682,  # LegOrderQty
-            683,  # LegQty
-            684,  # LegSwapType
-            685,  # LegBenchmarkCurveCurrency
-            686,  # LegBenchmarkCurveName
-            687,  # LegBenchmarkCurvePoint
+            682,  # LegIOIQty
+            683,  # NoLegStipulations
+            684,  # LegOfferPx
+            685,  # LegOrderQty (FIX 5.0+, added via fx_tags)
+            686,  # LegPriceType
+            687,  # LegQty
         },
     ),
     # Allocations

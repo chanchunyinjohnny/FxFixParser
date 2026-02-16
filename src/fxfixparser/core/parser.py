@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -14,6 +15,8 @@ from fxfixparser.tags.dictionary import TagDictionary
 if TYPE_CHECKING:
     from fxfixparser.venues.base import VenueHandler
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class ParserConfig:
@@ -21,6 +24,7 @@ class ParserConfig:
 
     strict_checksum: bool = True
     strict_body_length: bool = False
+    strict_delimiter: bool = False
     default_delimiter: str = "\x01"
     allow_pipe_delimiter: bool = True
 
@@ -93,6 +97,8 @@ class FixParser:
             if handler is None:
                 # Try to match by sender ID
                 handler = registry.get_by_sender_id(venue)
+            if handler is None:
+                logger.debug("No venue handler found for '%s'", venue)
             return handler
 
         return venue
@@ -124,16 +130,34 @@ class FixParser:
         returns may appear when messages are copied from logs or files with
         line wrapping. These must be stripped so that tag=value pairs that
         were split across lines are reassembled correctly.
+
+        When line breaks appear between fields (i.e. after a delimiter or
+        before a new tag=value pair), they are replaced with SOH to preserve
+        field boundaries.
         """
-        # Strip newlines/carriage returns that break tag=value pairs
+        # Replace line breaks that appear between fields (i.e. right
+        # before a "tag=" pattern) with SOH to preserve field boundaries.
+        message = re.sub(r"(\r\n|\r|\n)(?=\d+=)", self.SOH, message)
+        # Strip remaining line breaks that are mid-value line wrapping
+        # so that split values are reassembled correctly.
         message = message.replace("\r\n", "").replace("\r", "").replace("\n", "")
         if self.config.allow_pipe_delimiter and self.PIPE in message:
             return message.replace(self.PIPE, self.SOH)
         return message
 
     def _extract_fields(self, message: str) -> list[tuple[int, str]]:
-        """Extract tag=value pairs from the message."""
-        pattern = r"(\d+)=([^" + self.SOH + r"]*)" + self.SOH + r"?"
+        """Extract tag=value pairs from the message.
+
+        In strict delimiter mode, SOH is required after each field.
+        In non-strict mode (default), SOH is optional after the last field
+        to be lenient with messages that omit the trailing delimiter.
+        """
+        if self.config.strict_delimiter:
+            # Require SOH after every field (mandatory delimiter)
+            pattern = r"(\d+)=([^" + self.SOH + r"]*)" + self.SOH
+        else:
+            # Allow optional trailing SOH (lenient for last field)
+            pattern = r"(\d+)=([^" + self.SOH + r"]*)" + self.SOH + r"?"
         matches = re.findall(pattern, message)
 
         fields: list[tuple[int, str]] = []
@@ -142,6 +166,7 @@ class FixParser:
                 tag = int(tag_str)
                 fields.append((tag, value))
             except ValueError:
+                logger.debug("Skipping field with non-numeric tag: '%s'", tag_str)
                 continue
 
         return fields
@@ -182,17 +207,34 @@ class FixParser:
             self._validate_checksum(message, normalized)
 
     def _validate_checksum(self, message: FixMessage, normalized: str) -> None:
-        """Validate the message checksum."""
-        checksum_field = message.get_field(10)
-        if not checksum_field:
+        """Validate the message checksum.
+
+        Uses the last tag-10 field from the parsed field list to correctly
+        handle messages where "10=" may appear inside field values or as
+        an earlier non-checksum tag.
+        """
+        checksum_field = message.fields[-1]
+        if checksum_field.tag != 10:
             raise ValidationError("Missing CheckSum (tag 10)")
 
-        # Find position of checksum field
-        checksum_start = normalized.rfind("10=")
-        if checksum_start == -1:
-            raise ValidationError("Cannot locate checksum in message")
+        # Build the checksum body: everything before the final "10=..." SOH.
+        # Find the position by searching backwards for the SOH + "10="
+        # pattern that corresponds to the last field.
+        search_pattern = self.SOH + "10=" + checksum_field.raw_value
+        checksum_pos = normalized.rfind(search_pattern)
+        if checksum_pos != -1:
+            # Include the SOH that precedes "10=" in the body
+            body = normalized[: checksum_pos + 1]
+        else:
+            # Fallback: the message may start with "10=" (degenerate case)
+            # or have no preceding SOH (e.g. "10=" is at position 0)
+            prefix = "10=" + checksum_field.raw_value
+            if normalized.endswith(prefix) or normalized.endswith(prefix + self.SOH):
+                idx = normalized.rfind(prefix)
+                body = normalized[:idx]
+            else:
+                raise ValidationError("Cannot locate checksum in message")
 
-        body = normalized[:checksum_start]
         expected = self.calculate_checksum(body)
         actual = checksum_field.raw_value
 

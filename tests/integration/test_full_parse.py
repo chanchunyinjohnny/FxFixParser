@@ -164,3 +164,59 @@ class TestFullParseWorkflow:
         assert symbol_field is not None
         assert symbol_field["value"] == "EUR/USD"
         assert symbol_field["name"] == "Symbol"
+
+    def test_forward_trade_extraction(
+        self,
+        parser: FixParser,
+        venue_registry: VenueRegistry,
+    ) -> None:
+        """Test trade extraction for forward trade (360T)."""
+        message = parser.parse(FORWARD_MESSAGE)
+        venue_handler = venue_registry.get_by_sender_id(message.sender_comp_id)
+        assert venue_handler is not None
+
+        trade = venue_handler.extract_trade(message)
+        assert trade.symbol == "EUR/USD"
+        assert trade.side == "Buy"
+        assert trade.quantity == 5000000.0
+        assert trade.price == 1.0900
+        assert trade.currency == "EUR"
+        assert trade.venue == "360T"
+        assert trade.settlement_date == "20240415"
+
+    def test_swap_trade_extraction(
+        self,
+        parser: FixParser,
+        venue_registry: VenueRegistry,
+    ) -> None:
+        """Test trade extraction for swap trade (Smart Trade)."""
+        message = parser.parse(SWAP_MESSAGE)
+        venue_handler = venue_registry.get_by_sender_id(message.sender_comp_id)
+        assert venue_handler is not None
+
+        trade = venue_handler.extract_trade(message)
+        assert trade.symbol == "USD/JPY"
+        assert trade.side == "Buy"
+        assert trade.quantity == 10000000.0
+        assert trade.price == 148.50
+        assert trade.currency == "USD"
+        assert trade.venue == "Smart Trade (LiquidityFX)"
+        assert trade.settlement_date == "20240117"
+
+    def test_ndf_trade_extraction(
+        self,
+        parser: FixParser,
+        venue_registry: VenueRegistry,
+    ) -> None:
+        """Test trade extraction for NDF trade (FXGO)."""
+        message = parser.parse(NDF_MESSAGE)
+        venue_handler = venue_registry.get_by_sender_id(message.sender_comp_id)
+        assert venue_handler is not None
+
+        trade = venue_handler.extract_trade(message)
+        assert trade.symbol == "USD/KRW"
+        assert trade.side == "Buy"
+        assert trade.quantity == 5000000.0
+        assert trade.price == 1320.50
+        assert trade.currency == "USD"
+        assert trade.venue == "FXGO"

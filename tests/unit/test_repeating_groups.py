@@ -321,3 +321,154 @@ class TestFixMessageStructuredFields:
 
         # Should not have entry markers
         assert "[Entry" not in output
+
+
+class TestGroupBoundaryDetection:
+    """Tests for improved entry boundary detection using seen_tags set."""
+
+    def test_boundary_detected_on_different_starting_tags(self) -> None:
+        """Test that entry boundary is detected when any seen tag repeats.
+
+        Before the fix, boundary detection only checked if the first tag
+        of the group repeated. Now it checks if ANY previously-seen tag
+        in the current entry repeats.
+        """
+        # Two MD entries that start with different tags but share tag 270
+        # Entry 1: 269, 270, 271
+        # Entry 2: 270, 271  (boundary should trigger when 270 repeats)
+        fields = [
+            FixField(tag=8, raw_value="FIX.4.4"),
+            FixField(tag=35, raw_value="W"),
+            FixField(tag=268, raw_value="2"),  # NoMDEntries = 2
+            FixField(tag=269, raw_value="0"),  # MDEntryType - Bid
+            FixField(tag=270, raw_value="1.0850"),  # MDEntryPx
+            FixField(tag=271, raw_value="1000000"),  # MDEntrySize
+            FixField(tag=270, raw_value="1.0852"),  # MDEntryPx - triggers boundary
+            FixField(tag=271, raw_value="2000000"),  # MDEntrySize
+            FixField(tag=10, raw_value="000"),
+        ]
+        message = FixMessage(fields=fields)
+
+        structured = message.get_structured_fields()
+        groups = [sf for sf in structured if sf.is_group]
+        assert len(groups) == 1
+
+        group = groups[0].group
+        assert group is not None
+        assert len(group.entries) == 2
+
+        # Entry 1 should have tags 269, 270, 271
+        entry1_tags = [f.tag for f in group.entries[0].fields]
+        assert entry1_tags == [269, 270, 271]
+        assert group.entries[0].fields[1].raw_value == "1.0850"
+
+        # Entry 2 should have tags 270, 271
+        entry2_tags = [f.tag for f in group.entries[1].fields]
+        assert entry2_tags == [270, 271]
+        assert group.entries[1].fields[0].raw_value == "1.0852"
+
+    def test_boundary_with_multi_field_entries(self) -> None:
+        """Test boundary detection with entries containing many fields."""
+        # Three party ID entries where PartyRole (452) repeats to mark boundaries
+        fields = [
+            FixField(tag=8, raw_value="FIX.4.4"),
+            FixField(tag=35, raw_value="8"),
+            FixField(tag=453, raw_value="3"),  # NoPartyIDs = 3
+            FixField(tag=448, raw_value="TRADER1"),  # PartyID
+            FixField(tag=447, raw_value="D"),  # PartyIDSource
+            FixField(tag=452, raw_value="11"),  # PartyRole
+            FixField(tag=448, raw_value="FIRM1"),  # PartyID - triggers boundary
+            FixField(tag=447, raw_value="D"),
+            FixField(tag=452, raw_value="13"),
+            FixField(tag=448, raw_value="DESK1"),  # PartyID - triggers boundary
+            FixField(tag=452, raw_value="36"),
+            FixField(tag=10, raw_value="000"),
+        ]
+        message = FixMessage(fields=fields)
+
+        structured = message.get_structured_fields()
+        groups = [sf for sf in structured if sf.is_group]
+        assert len(groups) == 1
+
+        group = groups[0].group
+        assert group is not None
+        assert len(group.entries) == 3
+        assert group.entries[0].fields[0].raw_value == "TRADER1"
+        assert group.entries[1].fields[0].raw_value == "FIRM1"
+        assert group.entries[2].fields[0].raw_value == "DESK1"
+
+    def test_single_entry_no_boundary_needed(self) -> None:
+        """Test that a single-entry group works without boundary detection."""
+        fields = [
+            FixField(tag=8, raw_value="FIX.4.4"),
+            FixField(tag=35, raw_value="W"),
+            FixField(tag=268, raw_value="1"),  # NoMDEntries = 1
+            FixField(tag=269, raw_value="0"),
+            FixField(tag=270, raw_value="1.0850"),
+            FixField(tag=271, raw_value="1000000"),
+            FixField(tag=10, raw_value="000"),
+        ]
+        message = FixMessage(fields=fields)
+
+        structured = message.get_structured_fields()
+        groups = [sf for sf in structured if sf.is_group]
+        assert len(groups) == 1
+
+        group = groups[0].group
+        assert group is not None
+        assert len(group.entries) == 1
+        assert len(group.entries[0].fields) == 3
+
+
+class TestGroupCountValidation:
+    """Tests for group count mismatch warnings."""
+
+    def test_count_mismatch_fewer_entries(self) -> None:
+        """Test that fewer entries than declared count still parses."""
+        # Declare 3 entries but only provide 2
+        fields = [
+            FixField(tag=8, raw_value="FIX.4.4"),
+            FixField(tag=35, raw_value="W"),
+            FixField(tag=268, raw_value="3"),  # NoMDEntries = 3
+            FixField(tag=269, raw_value="0"),
+            FixField(tag=270, raw_value="1.0850"),
+            FixField(tag=269, raw_value="1"),  # Second entry
+            FixField(tag=270, raw_value="1.0852"),
+            FixField(tag=10, raw_value="000"),  # Non-member tag ends group
+        ]
+        message = FixMessage(fields=fields)
+
+        structured = message.get_structured_fields()
+        groups = [sf for sf in structured if sf.is_group]
+        assert len(groups) == 1
+
+        group = groups[0].group
+        assert group is not None
+        # Should find 2 entries despite declaring 3
+        assert len(group.entries) == 2
+
+    def test_non_numeric_group_count(self) -> None:
+        """Test that non-numeric group count is handled gracefully."""
+        count_field = FixField(tag=268, raw_value="abc")
+        group = RepeatingGroup(name="Test Group", count_field=count_field)
+
+        assert group.count == 0
+
+    def test_zero_count_produces_no_entries(self) -> None:
+        """Test that count=0 produces no entries."""
+        fields = [
+            FixField(tag=8, raw_value="FIX.4.4"),
+            FixField(tag=35, raw_value="W"),
+            FixField(tag=268, raw_value="0"),  # NoMDEntries = 0
+            FixField(tag=269, raw_value="0"),  # This should not be grouped
+            FixField(tag=10, raw_value="000"),
+        ]
+        message = FixMessage(fields=fields)
+
+        structured = message.get_structured_fields()
+        groups = [sf for sf in structured if sf.is_group]
+        assert len(groups) == 1
+
+        group = groups[0].group
+        assert group is not None
+        assert len(group.entries) == 0

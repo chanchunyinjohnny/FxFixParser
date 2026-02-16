@@ -83,6 +83,30 @@ class TestFixField:
         field_no = FixField(tag=43, raw_value="N", definition=defn)
         assert field_no.typed_value is False
 
+    def test_field_typed_value_boolean_numeric(self) -> None:
+        """Test typed value conversion for BOOLEAN type with numeric 1/0 values."""
+        defn = FixFieldDefinition(tag=43, name="PossDupFlag", field_type="BOOLEAN")
+
+        field_one = FixField(tag=43, raw_value="1", definition=defn)
+        assert field_one.typed_value is True
+
+        field_zero = FixField(tag=43, raw_value="0", definition=defn)
+        assert field_zero.typed_value is False
+
+    def test_field_typed_value_int_invalid_returns_raw(self) -> None:
+        """Test that invalid INT values return raw string without crashing."""
+        defn = FixFieldDefinition(tag=34, name="MsgSeqNum", field_type="INT")
+        field = FixField(tag=34, raw_value="abc", definition=defn)
+
+        assert field.typed_value == "abc"
+
+    def test_field_typed_value_float_invalid_returns_raw(self) -> None:
+        """Test that invalid FLOAT values return raw string without crashing."""
+        defn = FixFieldDefinition(tag=31, name="LastPx", field_type="PRICE")
+        field = FixField(tag=31, raw_value="not_a_number", definition=defn)
+
+        assert field.typed_value == "not_a_number"
+
     def test_field_value_description(self) -> None:
         """Test value description for enumerated fields."""
         defn = FixFieldDefinition(

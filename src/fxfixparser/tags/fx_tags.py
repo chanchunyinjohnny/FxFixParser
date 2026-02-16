@@ -72,6 +72,17 @@ LFX_TENOR_VALUES = {
 
 FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
     # ============================================================================
+    # Standard FIX tags not in FIX 4.4 XML but used in repeating groups
+    # (FIX 5.0 / FIX 5.0 SP2 additions)
+    # ============================================================================
+    FixFieldDefinition(685, "LegOrderQty", "QTY", "Order quantity for a leg of a multi-leg instrument."),
+    FixFieldDefinition(1362, "NoFills", "NUMINGROUP", "Number of fill entries in the Fills repeating group."),
+    FixFieldDefinition(1363, "FillExecID", "STRING", "Unique identifier of the fill as assigned by the sell-side."),
+    FixFieldDefinition(1364, "FillPx", "PRICE", "Price of this fill."),
+    FixFieldDefinition(1365, "FillQty", "QTY", "Quantity bought/sold on this fill."),
+    FixFieldDefinition(1443, "FillLiquidityInd", "INT", "Indicator to identify whether this fill was a result of a liquidity provider providing or taking liquidity."),
+
+    # ============================================================================
     # LiquidityFX (LFX) Custom Tags - 8000 Range
     # Based on smartTrade LiquidityFX Distribution FIX ROE v4.2.78.0-GA
     # ============================================================================
@@ -140,6 +151,7 @@ FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
 
     # Market Data timestamps
     FixFieldDefinition(9122, "MDEntryOrigTime", "UTCTIMEONLY", "The UTC time received from venue HH:mm:ss.SSS. Only available when no aggregation (AggregatedBook=N)."),
+    FixFieldDefinition(9123, "MDEntryOrigDate", "UTCDATEONLY", "The UTC date received from venue YYYYMMDD. Only available when no aggregation (AggregatedBook=N)."),
 
     # Fixing orders
     FixFieldDefinition(9300, "FixingSourceID", "STRING", "ID of the fixing source for fixing orders."),
@@ -227,7 +239,7 @@ FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
     # ============================================================================
     FixFieldDefinition(6000, "TradeReportID", "STRING", "Trade report identifier. Unique ID for regulatory trade reporting."),
     FixFieldDefinition(6001, "RegulatoryReportType", "INT", "Regulatory report type. Indicates the type of regulatory report."),
-    FixFieldDefinition(6002, "UTI", "STRING", "Unique Transaction Identifier for EMIR/MiFID reporting."),
+    FixFieldDefinition(6002, "RegulatoryUTI", "STRING", "Unique Transaction Identifier for EMIR/MiFID regulatory reporting."),
     FixFieldDefinition(6003, "USI", "STRING", "Unique Swap Identifier for Dodd-Frank reporting."),
 
     # ============================================================================

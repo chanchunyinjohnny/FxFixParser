@@ -1,10 +1,13 @@
 """FIX message data models."""
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
 from fxfixparser.core.field import FixField
 from fxfixparser.tags.repeating_groups import get_group_definition
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -32,10 +35,14 @@ class RepeatingGroup:
 
     @property
     def count(self) -> int:
-        """Get the number of entries in this group."""
+        """Get the declared number of entries in this group."""
         try:
             return int(self.count_field.raw_value)
         except ValueError:
+            logger.warning(
+                "Non-numeric group count for %s (tag %d): '%s'",
+                self.name, self.count_field.tag, self.count_field.raw_value,
+            )
             return 0
 
     def to_dict(self) -> dict[str, Any]:
@@ -137,6 +144,10 @@ class FixMessage:
         This method analyzes the flat field list and organizes repeating groups
         into a hierarchical structure for better display.
 
+        Entry boundaries are detected when a member tag that has already been
+        seen in the current entry appears again, indicating the start of a
+        new entry.
+
         Returns:
             A list of StructuredField objects, where each may be either a
             standalone field or a repeating group containing multiple entries.
@@ -153,6 +164,10 @@ class FixMessage:
                 try:
                     count = int(current_field.raw_value)
                 except ValueError:
+                    logger.warning(
+                        "Non-numeric group count for tag %d: '%s'",
+                        current_field.tag, current_field.raw_value,
+                    )
                     count = 0
 
                 group = RepeatingGroup(
@@ -165,13 +180,15 @@ class FixMessage:
                 i += 1
                 entry_index = 1
                 current_entry: list[FixField] = []
+                seen_tags: set[int] = set()
 
                 while i < len(self.fields) and entry_index <= count:
-                    field = self.fields[i]
+                    fld = self.fields[i]
 
-                    if field.tag in group_def.member_tags:
-                        # Check if this is a new entry (first tag of member_tags repeating)
-                        if current_entry and field.tag == current_entry[0].tag:
+                    if fld.tag in group_def.member_tags:
+                        # Detect entry boundary: if we've already seen this
+                        # tag in the current entry, it marks a new entry
+                        if current_entry and fld.tag in seen_tags:
                             # Save previous entry and start new one
                             group.entries.append(
                                 RepeatingGroupEntry(
@@ -180,9 +197,11 @@ class FixMessage:
                                 )
                             )
                             entry_index += 1
-                            current_entry = [field]
+                            current_entry = [fld]
+                            seen_tags = {fld.tag}
                         else:
-                            current_entry.append(field)
+                            current_entry.append(fld)
+                            seen_tags.add(fld.tag)
                         i += 1
                     else:
                         # Not a member tag - end of group entries
@@ -195,6 +214,14 @@ class FixMessage:
                             index=entry_index,
                             fields=current_entry,
                         )
+                    )
+
+                # Validate actual vs declared count
+                actual_count = len(group.entries)
+                if count > 0 and actual_count != count:
+                    logger.warning(
+                        "Group '%s' (tag %d) declared %d entries but found %d",
+                        group_def.name, current_field.tag, count, actual_count,
                     )
 
                 result.append(StructuredField(group=group))

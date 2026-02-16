@@ -1,7 +1,10 @@
 """FIX field data models."""
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -60,16 +63,24 @@ class FixField:
             try:
                 return int(self.raw_value)
             except ValueError:
+                logger.debug(
+                    "Cannot convert tag %d (%s) value '%s' to int",
+                    self.tag, self.name, self.raw_value,
+                )
                 return self.raw_value
 
         if field_type in ("FLOAT", "PRICE", "QTY", "AMT", "PERCENTAGE", "PRICEOFFSET"):
             try:
                 return float(self.raw_value)
             except ValueError:
+                logger.debug(
+                    "Cannot convert tag %d (%s) value '%s' to float",
+                    self.tag, self.name, self.raw_value,
+                )
                 return self.raw_value
 
         if field_type == "BOOLEAN":
-            return self.raw_value == "Y"
+            return self.raw_value in ("Y", "1")
 
         return self.raw_value
 

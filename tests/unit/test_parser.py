@@ -107,5 +107,100 @@ class TestFixParser:
 
         assert config.strict_checksum is True
         assert config.strict_body_length is False
+        assert config.strict_delimiter is False
         assert config.default_delimiter == "\x01"
         assert config.allow_pipe_delimiter is True
+
+
+class TestCRLFNormalization:
+    """Tests for CRLF normalization bug fix."""
+
+    def test_crlf_between_fields_preserves_boundaries(self) -> None:
+        """Test that CRLF between fields doesn't merge field values."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        # Message with CRLF between tag 55 and tag 15
+        msg = "8=FIX.4.4\x019=100\x0135=8\x0149=FXGO\x0156=CLIENT\x0155=EUR/USD\r\n15=EUR\x0110=000\x01"
+        message = parser.parse(msg)
+
+        assert message.get_value(55) == "EUR/USD"
+        assert message.get_value(15) == "EUR"
+
+    def test_lf_between_fields_preserves_boundaries(self) -> None:
+        """Test that LF between fields doesn't merge field values."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        msg = "8=FIX.4.4\x019=100\x0135=8\x0149=FXGO\x0156=CLIENT\x0155=EUR/USD\n15=EUR\x0110=000\x01"
+        message = parser.parse(msg)
+
+        assert message.get_value(55) == "EUR/USD"
+        assert message.get_value(15) == "EUR"
+
+    def test_cr_between_fields_preserves_boundaries(self) -> None:
+        """Test that CR between fields doesn't merge field values."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        msg = "8=FIX.4.4\x019=100\x0135=8\x0149=FXGO\x0156=CLIENT\x0155=EUR/USD\r15=EUR\x0110=000\x01"
+        message = parser.parse(msg)
+
+        assert message.get_value(55) == "EUR/USD"
+        assert message.get_value(15) == "EUR"
+
+    def test_newline_mid_value_reassembled(self) -> None:
+        """Test that a newline within a field value is stripped, reassembling the value."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        # Tag 58 (Text) value is split across two lines by log wrapping
+        msg = "8=FIX.4.4\x019=100\x0135=8\x0149=FXGO\x0156=CLIENT\x0158=Long\ntext\x0110=000\x01"
+        message = parser.parse(msg)
+
+        assert message.get_value(58) == "Longtext"
+
+    def test_crlf_mid_value_reassembled(self) -> None:
+        """Test that CRLF within a field value is stripped, reassembling the value."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        msg = "8=FIX.4.4\x019=100\x0135=8\x0149=FXGO\x0156=CLIENT\x0158=Long\r\ntext\x0110=000\x01"
+        message = parser.parse(msg)
+
+        assert message.get_value(58) == "Longtext"
+
+    def test_crlf_before_checksum_preserves_tag10(self) -> None:
+        """Test that CRLF before checksum doesn't lose tag 10."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        msg = "8=FIX.4.4\x019=100\x0135=0\x0149=SENDER\x0156=TARGET\r\n10=000\x01"
+        message = parser.parse(msg)
+
+        assert message.checksum == "000"
+        assert message.fields[-1].tag == 10
+
+
+class TestStrictDelimiter:
+    """Tests for strict_delimiter config option."""
+
+    def test_strict_delimiter_config(self) -> None:
+        """Test that strict_delimiter option exists and defaults to False."""
+        config = ParserConfig()
+        assert config.strict_delimiter is False
+
+    def test_strict_delimiter_rejects_missing_trailing_soh(self) -> None:
+        """Test that strict mode rejects fields without trailing SOH."""
+        parser = FixParser(config=ParserConfig(
+            strict_checksum=False,
+            strict_delimiter=True,
+        ))
+        # Message where last field lacks trailing SOH
+        msg = "8=FIX.4.4\x019=50\x0135=0\x0149=SENDER\x0156=TARGET\x0110=000"
+        # In strict mode, tag 10 without trailing SOH won't be found
+        with pytest.raises(ValidationError, match="CheckSum"):
+            parser.parse(msg)
+
+
+class TestChecksumValidation:
+    """Tests for improved checksum validation."""
+
+    def test_valid_checksum(self) -> None:
+        """Test that a message with correct checksum passes validation."""
+        # Build a message and compute correct checksum
+        body = "8=FIX.4.4\x019=14\x0135=0\x0149=S\x0156=T\x01"
+        checksum = FixParser.calculate_checksum(body)
+        msg = body + f"10={checksum}\x01"
+
+        parser = FixParser(config=ParserConfig(strict_checksum=True))
+        message = parser.parse(msg)
+        assert message.checksum == checksum
