@@ -1,7 +1,8 @@
-"""FIX 4.4 specification XML loader.
+"""FIX specification XML loader.
 
-Parses the official FIX44.xml specification file and generates
+Parses QuickFIX-format XML specification files and generates
 FixFieldDefinition objects for use in the tag dictionary.
+Supports any QuickFIX XML (FIX44.xml, FIX50SP2.xml, etc.).
 """
 
 import logging
@@ -16,26 +17,30 @@ _SPEC_DIR = Path(__file__).parent
 _FIX44_XML = _SPEC_DIR / "FIX44.xml"
 
 
-def load_fix44_fields(xml_path: Path | None = None) -> list[FixFieldDefinition]:
-    """Load field definitions from the FIX 4.4 XML specification.
+def load_fix_spec_fields(xml_path: Path) -> list[FixFieldDefinition]:
+    """Load field definitions from any QuickFIX-format XML specification.
+
+    Parses a QuickFIX XML file with the standard ``<fix><fields><field>``
+    structure and returns a list of :class:`FixFieldDefinition` objects.
 
     Args:
-        xml_path: Path to the FIX44.xml file. Defaults to the bundled spec.
+        xml_path: Path to the QuickFIX XML specification file.
 
     Returns:
         A list of FixFieldDefinition objects for all fields in the spec.
+        Returns an empty list if the file does not exist or contains no
+        ``<fields>`` element.
     """
-    path = xml_path or _FIX44_XML
-    if not path.exists():
-        logger.warning("FIX44.xml not found at %s, returning empty list", path)
+    if not xml_path.exists():
+        logger.warning("Spec XML not found at %s, returning empty list", xml_path)
         return []
 
-    tree = ET.parse(path)  # noqa: S314
+    tree = ET.parse(xml_path)  # noqa: S314
     root = tree.getroot()
 
     fields_elem = root.find("fields")
     if fields_elem is None:
-        logger.warning("No <fields> element found in %s", path)
+        logger.warning("No <fields> element found in %s", xml_path)
         return []
 
     definitions: list[FixFieldDefinition] = []
@@ -69,5 +74,21 @@ def load_fix44_fields(xml_path: Path | None = None) -> list[FixFieldDefinition]:
             )
         )
 
-    logger.info("Loaded %d field definitions from %s", len(definitions), path)
+    logger.info("Loaded %d field definitions from %s", len(definitions), xml_path)
     return definitions
+
+
+def load_fix44_fields(xml_path: Path | None = None) -> list[FixFieldDefinition]:
+    """Load field definitions from the FIX 4.4 XML specification.
+
+    This is a convenience wrapper around :func:`load_fix_spec_fields` that
+    defaults to the bundled FIX44.xml file.
+
+    Args:
+        xml_path: Path to the FIX44.xml file. Defaults to the bundled spec.
+
+    Returns:
+        A list of FixFieldDefinition objects for all fields in the spec.
+    """
+    path = xml_path or _FIX44_XML
+    return load_fix_spec_fields(path)

@@ -3,11 +3,17 @@
 import pytest
 
 from fxfixparser.core.parser import FixParser, ParserConfig
+from fxfixparser.venues.bloomberg_dor import BloombergDORHandler
 from fxfixparser.venues.fxgo import FXGOHandler
 from fxfixparser.venues.registry import VenueRegistry
 from fxfixparser.venues.smart_trade import SmartTradeHandler
 from fxfixparser.venues.three_sixty_t import ThreeSixtyTHandler
-from tests.fixtures.sample_messages import FORWARD_MESSAGE, SPOT_MESSAGE_PIPE, SWAP_MESSAGE
+from tests.fixtures.sample_messages import (
+    BLOOMBERG_DOR_SPOT_EXEC,
+    FORWARD_MESSAGE,
+    SPOT_MESSAGE_PIPE,
+    SWAP_MESSAGE,
+)
 
 
 class TestVenueHandlers:
@@ -142,6 +148,33 @@ class TestVenueHandlers:
 
         assert enhanced.venue == "Smart Trade (LiquidityFX)"
 
+    def test_bloomberg_dor_handler_properties(self) -> None:
+        handler = BloombergDORHandler()
+        assert handler.name == "Bloomberg DOR"
+        assert "BLOOMBERG_DOR" in handler.sender_comp_ids
+        assert "DOR" in handler.sender_comp_ids
+
+    def test_bloomberg_dor_matches_sender(self) -> None:
+        handler = BloombergDORHandler()
+        assert handler.matches_sender("BLOOMBERG_DOR")
+        assert handler.matches_sender("bloomberg_dor")
+        assert handler.matches_sender("DOR")
+        assert handler.matches_sender("FXOM")
+        assert not handler.matches_sender("FXGO")
+        assert not handler.matches_sender(None)
+
+    def test_extract_trade_bloomberg_dor(self) -> None:
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        message = parser.parse(BLOOMBERG_DOR_SPOT_EXEC, venue="Bloomberg DOR")
+        handler = BloombergDORHandler()
+        trade = handler.extract_trade(message)
+        assert trade.symbol == "EUR/USD"
+        assert trade.side == "Buy"
+        assert trade.quantity == 1000000.0
+        assert trade.price == 1.08500
+        assert trade.currency == "EUR"
+        assert trade.venue == "Bloomberg DOR"
+
 
 class TestVenueRegistry:
     """Tests for VenueRegistry class."""
@@ -204,3 +237,15 @@ class TestVenueRegistry:
         handler = venue_registry.get_by_sender_id(st_msg.sender_comp_id)
         assert handler is not None
         assert handler.name == "Smart Trade (LiquidityFX)"
+
+    def test_default_registry_includes_bloomberg_dor(self, venue_registry: VenueRegistry) -> None:
+        venues = venue_registry.all_venues()
+        venue_names = [v.name for v in venues]
+        assert "Bloomberg DOR" in venue_names
+
+    def test_venue_detection_bloomberg_dor(self, venue_registry: VenueRegistry) -> None:
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        msg = parser.parse(BLOOMBERG_DOR_SPOT_EXEC)
+        handler = venue_registry.get_by_sender_id(msg.sender_comp_id)
+        assert handler is not None
+        assert handler.name == "Bloomberg DOR"

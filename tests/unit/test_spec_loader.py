@@ -1,8 +1,8 @@
-"""Unit tests for the FIX44.xml specification loader."""
+"""Unit tests for the FIX specification XML loader."""
 
 from pathlib import Path
 
-from fxfixparser.spec.loader import load_fix44_fields
+from fxfixparser.spec.loader import load_fix44_fields, load_fix_spec_fields
 from fxfixparser.tags.dictionary import TagDictionary
 
 
@@ -94,3 +94,17 @@ class TestFIX44XMLLoader:
         symbol = dictionary.get(55)
         assert symbol is not None
         assert "currency pair" in symbol.description.lower()
+
+
+class TestLoadFixSpecFields:
+    """Tests for the generic load_fix_spec_fields function."""
+
+    def test_load_nonexistent_file_returns_empty(self) -> None:
+        """Test that loading a nonexistent file returns an empty list."""
+        fields = load_fix_spec_fields(Path("/nonexistent/spec.xml"))
+        assert fields == []
+
+    def test_load_fix44_fields_still_works(self) -> None:
+        """Test backward compatibility: load_fix44_fields() still returns fields."""
+        fields = load_fix44_fields()
+        assert len(fields) > 0

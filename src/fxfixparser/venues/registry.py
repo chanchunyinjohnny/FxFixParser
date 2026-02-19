@@ -1,6 +1,7 @@
 """Venue registry for managing venue handlers."""
 
 from fxfixparser.venues.base import VenueHandler
+from fxfixparser.venues.bloomberg_dor import BloombergDORHandler
 from fxfixparser.venues.fxgo import FXGOHandler
 from fxfixparser.venues.smart_trade import SmartTradeHandler
 from fxfixparser.venues.three_sixty_t import ThreeSixtyTHandler
@@ -40,4 +41,5 @@ class VenueRegistry:
         registry.register(SmartTradeHandler())
         registry.register(FXGOHandler())
         registry.register(ThreeSixtyTHandler())
+        registry.register(BloombergDORHandler())
         return registry
