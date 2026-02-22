@@ -309,6 +309,14 @@ The parser automatically handles both delimiters:
 - SOH (ASCII 0x01): Standard FIX delimiter
 - Pipe (`|`): Human-readable delimiter commonly used in logs
 
+## Support This Project
+
+If you find FxFixParser useful, consider supporting its development:
+
+- [GitHub Sponsors](https://github.com/sponsors/chanchunyinjohnny)
+- [Buy Me a Coffee](https://buymeacoffee.com/chanchunyinjohnny)
+- [Ko-fi](https://ko-fi.com/chanchunyinjohnny)
+
 ## License
 
 MIT License - Chan Chun Yin Johnny
