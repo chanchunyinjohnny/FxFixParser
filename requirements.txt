@@ -1,0 +1,3 @@
+# Runtime dependencies for Streamlit Community Cloud.
+# Pinned to 1.30 to match the version the UI is built and tested against.
+streamlit==1.30
