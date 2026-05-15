@@ -5,6 +5,7 @@ import pytest
 from fxfixparser.core.exceptions import ParseError, ValidationError
 from fxfixparser.core.parser import FixParser, ParserConfig
 from tests.fixtures.sample_messages import (
+    BLOOMBERG_DOR_ALGO_EXEC,
     INVALID_NO_BEGIN_STRING,
     INVALID_NO_CHECKSUM,
     INVALID_WRONG_ORDER,
@@ -119,7 +120,10 @@ class TestCRLFNormalization:
         """Test that CRLF between fields doesn't merge field values."""
         parser = FixParser(config=ParserConfig(strict_checksum=False))
         # Message with CRLF between tag 55 and tag 15
-        msg = "8=FIX.4.4\x019=100\x0135=8\x0149=FXGO\x0156=CLIENT\x0155=EUR/USD\r\n15=EUR\x0110=000\x01"
+        msg = (
+            "8=FIX.4.4\x019=100\x0135=8\x0149=FXGO\x0156=CLIENT\x0155=EUR/USD"
+            "\r\n15=EUR\x0110=000\x01"
+        )
         message = parser.parse(msg)
 
         assert message.get_value(55) == "EUR/USD"
@@ -128,7 +132,9 @@ class TestCRLFNormalization:
     def test_lf_between_fields_preserves_boundaries(self) -> None:
         """Test that LF between fields doesn't merge field values."""
         parser = FixParser(config=ParserConfig(strict_checksum=False))
-        msg = "8=FIX.4.4\x019=100\x0135=8\x0149=FXGO\x0156=CLIENT\x0155=EUR/USD\n15=EUR\x0110=000\x01"
+        msg = (
+            "8=FIX.4.4\x019=100\x0135=8\x0149=FXGO\x0156=CLIENT\x0155=EUR/USD\n15=EUR\x0110=000\x01"
+        )
         message = parser.parse(msg)
 
         assert message.get_value(55) == "EUR/USD"
@@ -137,7 +143,9 @@ class TestCRLFNormalization:
     def test_cr_between_fields_preserves_boundaries(self) -> None:
         """Test that CR between fields doesn't merge field values."""
         parser = FixParser(config=ParserConfig(strict_checksum=False))
-        msg = "8=FIX.4.4\x019=100\x0135=8\x0149=FXGO\x0156=CLIENT\x0155=EUR/USD\r15=EUR\x0110=000\x01"
+        msg = (
+            "8=FIX.4.4\x019=100\x0135=8\x0149=FXGO\x0156=CLIENT\x0155=EUR/USD\r15=EUR\x0110=000\x01"
+        )
         message = parser.parse(msg)
 
         assert message.get_value(55) == "EUR/USD"
@@ -180,10 +188,12 @@ class TestStrictDelimiter:
 
     def test_strict_delimiter_rejects_missing_trailing_soh(self) -> None:
         """Test that strict mode rejects fields without trailing SOH."""
-        parser = FixParser(config=ParserConfig(
-            strict_checksum=False,
-            strict_delimiter=True,
-        ))
+        parser = FixParser(
+            config=ParserConfig(
+                strict_checksum=False,
+                strict_delimiter=True,
+            )
+        )
         # Message where last field lacks trailing SOH
         msg = "8=FIX.4.4\x019=50\x0135=0\x0149=SENDER\x0156=TARGET\x0110=000"
         # In strict mode, tag 10 without trailing SOH won't be found
@@ -204,3 +214,74 @@ class TestChecksumValidation:
         parser = FixParser(config=ParserConfig(strict_checksum=True))
         message = parser.parse(msg)
         assert message.checksum == checksum
+
+
+class TestBodyLengthValidation:
+    """Tests for the strict_body_length config option."""
+
+    # Body from tag 35 onward, up to and including the SOH before tag 10.
+    _BODY = "35=0\x0149=SENDER\x0156=TARGET\x01"
+
+    def test_correct_body_length_passes_when_strict(self) -> None:
+        """A message with a correct BodyLength passes strict validation."""
+        msg = f"8=FIX.4.4\x019={len(self._BODY)}\x01{self._BODY}10=000\x01"
+        parser = FixParser(config=ParserConfig(strict_checksum=False, strict_body_length=True))
+        message = parser.parse(msg)
+        assert message.body_length == len(self._BODY)
+
+    def test_wrong_body_length_raises_when_strict(self) -> None:
+        """A message with a wrong BodyLength raises ValidationError when strict."""
+        msg = f"8=FIX.4.4\x019=999\x01{self._BODY}10=000\x01"
+        parser = FixParser(config=ParserConfig(strict_checksum=False, strict_body_length=True))
+        with pytest.raises(ValidationError, match="BodyLength"):
+            parser.parse(msg)
+
+    def test_wrong_body_length_ignored_when_not_strict(self) -> None:
+        """A wrong BodyLength is tolerated when strict_body_length is off."""
+        msg = f"8=FIX.4.4\x019=999\x01{self._BODY}10=000\x01"
+        parser = FixParser(config=ParserConfig(strict_checksum=False, strict_body_length=False))
+        message = parser.parse(msg)
+        assert message.body_length == 999
+
+    def test_non_numeric_body_length_raises_when_strict(self) -> None:
+        """A non-numeric BodyLength raises ValidationError when strict."""
+        msg = f"8=FIX.4.4\x019=abc\x01{self._BODY}10=000\x01"
+        parser = FixParser(config=ParserConfig(strict_checksum=False, strict_body_length=True))
+        with pytest.raises(ValidationError, match="BodyLength"):
+            parser.parse(msg)
+
+
+class TestVenueAutoDetection:
+    """Tests for the auto_detect_venue parser option."""
+
+    def test_autodetect_applies_venue_tag_definitions(self) -> None:
+        """An auto-detected venue applies its venue-specific tag definitions."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        message = parser.parse(BLOOMBERG_DOR_ALGO_EXEC, auto_detect_venue=True)
+
+        assert message.venue == "Bloomberg DOR"
+        field = message.get_field(22913)
+        assert field is not None
+        assert field.name == "LastMktSpotRate"
+
+    def test_no_autodetect_leaves_custom_tags_unknown(self) -> None:
+        """Without auto-detect, venue custom tags are not resolved."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        message = parser.parse(BLOOMBERG_DOR_ALGO_EXEC)
+
+        assert message.venue is None
+        field = message.get_field(22913)
+        assert field is not None
+        assert field.name == "Unknown(22913)"
+
+    def test_explicit_venue_takes_precedence_over_autodetect(self) -> None:
+        """An explicitly supplied venue is used even when auto-detect is on."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        message = parser.parse(
+            BLOOMBERG_DOR_ALGO_EXEC, venue="Bloomberg DOR", auto_detect_venue=True
+        )
+
+        assert message.venue == "Bloomberg DOR"
+        field = message.get_field(22913)
+        assert field is not None
+        assert field.name == "LastMktSpotRate"

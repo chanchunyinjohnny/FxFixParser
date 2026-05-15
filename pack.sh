@@ -23,6 +23,7 @@ zip -r "$OUTPUT" \
     src/ \
     run_cli.py \
     run_ui.py \
+    streamlit_app.py \
     pyproject.toml \
     README.md \
     -x '**/__pycache__/*' \

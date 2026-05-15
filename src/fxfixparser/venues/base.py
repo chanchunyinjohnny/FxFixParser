@@ -49,7 +49,9 @@ class VenueHandler(ABC):
         else:  # Execution Report, Orders, etc.
             self._extract_execution_info(message, trade)
 
-        trade.currency = message.get_value(15) or message.get_value(8021)  # Currency or DealCurrency
+        trade.currency = message.get_value(15) or message.get_value(
+            8021
+        )  # Currency or DealCurrency
         trade.settlement_date = message.get_value(64)
         trade.order_id = message.get_value(37) or message.get_value(11)  # OrderID or ClOrdID
         trade.exec_id = message.get_value(17)

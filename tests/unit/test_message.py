@@ -1,7 +1,5 @@
 """Unit tests for FixMessage and related classes."""
 
-import pytest
-
 from fxfixparser.core.field import FixField, FixFieldDefinition
 from fxfixparser.core.message import FixMessage, ParsedTrade
 
@@ -139,9 +137,7 @@ class TestFixField:
 
     def test_field_str(self) -> None:
         """Test field string representation."""
-        defn = FixFieldDefinition(
-            tag=54, name="Side", field_type="CHAR", valid_values={"1": "Buy"}
-        )
+        defn = FixFieldDefinition(tag=54, name="Side", field_type="CHAR", valid_values={"1": "Buy"})
         field = FixField(tag=54, raw_value="1", definition=defn)
 
         assert str(field) == "Side (54): 1 (Buy)"

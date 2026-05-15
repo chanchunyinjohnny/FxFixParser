@@ -47,6 +47,7 @@ class FixParser:
         self,
         raw_message: str,
         venue: VenueHandler | str | None = None,
+        auto_detect_venue: bool = False,
     ) -> FixMessage:
         """Parse a raw FIX message string into a FixMessage object.
 
@@ -55,6 +56,10 @@ class FixParser:
             venue: Optional venue handler or venue name. When specified,
                    venue-specific tag definitions will be applied, which may
                    override generic definitions for the same tag numbers.
+            auto_detect_venue: When True and no explicit ``venue`` is given,
+                   the venue is detected from the message's component IDs and
+                   its venue-specific tag definitions are applied. Has no
+                   effect when ``venue`` is supplied.
 
         Returns:
             A FixMessage object containing the parsed fields.
@@ -77,13 +82,31 @@ class FixParser:
         fields = self._build_fields(raw_fields, dictionary)
         message = FixMessage(fields=fields, raw_message=raw_message)
 
-        # Set venue on message if specified
+        # Auto-detect the venue from the message's component IDs when no
+        # explicit venue was given, then rebuild the fields against the
+        # venue dictionary — otherwise venue custom tags stay Unknown.
+        if venue_handler is None and auto_detect_venue:
+            venue_handler = self._autodetect_venue(message)
+            if venue_handler is not None:
+                dictionary = self._get_dictionary_for_venue(venue_handler)
+                message = FixMessage(
+                    fields=self._build_fields(raw_fields, dictionary),
+                    raw_message=raw_message,
+                )
+
+        # Set venue on message if specified or detected
         if venue_handler:
             message.venue = venue_handler.name
 
         self._validate_structure(message, normalized)
 
         return message
+
+    def _autodetect_venue(self, message: FixMessage) -> VenueHandler | None:
+        """Detect a venue handler from a parsed message's component IDs."""
+        from fxfixparser.venues.registry import VenueRegistry
+
+        return VenueRegistry.default().detect_from_message(message)
 
     def _resolve_venue(self, venue: VenueHandler | str | None) -> VenueHandler | None:
         """Resolve venue parameter to a VenueHandler instance."""
@@ -92,6 +115,7 @@ class FixParser:
 
         if isinstance(venue, str):
             from fxfixparser.venues.registry import VenueRegistry
+
             registry = VenueRegistry.default()
             handler = registry.get(venue)
             if handler is None:
@@ -103,9 +127,7 @@ class FixParser:
 
         return venue
 
-    def _get_dictionary_for_venue(
-        self, venue_handler: VenueHandler | None
-    ) -> TagDictionary:
+    def _get_dictionary_for_venue(self, venue_handler: VenueHandler | None) -> TagDictionary:
         """Get a tag dictionary with venue-specific tags merged in."""
         if venue_handler is None or not venue_handler.custom_tags:
             return self.dictionary
@@ -202,9 +224,54 @@ class FixParser:
         if message.fields[-1].tag != 10:
             raise ValidationError("Message must end with CheckSum (tag 10)")
 
+        # Validate declared body length if strict mode
+        if self.config.strict_body_length:
+            self._validate_body_length(message, normalized)
+
         # Validate checksum if strict mode
         if self.config.strict_checksum:
             self._validate_checksum(message, normalized)
+
+    def _validate_body_length(self, message: FixMessage, normalized: str) -> None:
+        """Validate the declared BodyLength (tag 9).
+
+        Per the FIX specification, BodyLength is the number of characters in
+        the message starting immediately after the SOH that terminates the
+        BodyLength field, up to and including the SOH immediately preceding
+        the CheckSum (tag 10) field.
+        """
+        begin_string_field = message.fields[0]  # tag 8 (validated above)
+        body_length_field = message.fields[1]  # tag 9 (validated above)
+        checksum_field = message.fields[-1]  # tag 10 (validated above)
+
+        try:
+            declared = int(body_length_field.raw_value)
+        except ValueError:
+            raise ValidationError(
+                f"BodyLength (tag 9) is not numeric: " f"'{body_length_field.raw_value}'"
+            )
+
+        # The body begins immediately after the SOH terminating the
+        # BodyLength field, i.e. after the "8=...<SOH>9=...<SOH>" prefix.
+        prefix = (
+            f"8={begin_string_field.raw_value}{self.SOH}"
+            f"9={body_length_field.raw_value}{self.SOH}"
+        )
+        prefix_pos = normalized.find(prefix)
+        if prefix_pos == -1:
+            raise ValidationError("Cannot locate message body for BodyLength validation")
+        body_start = prefix_pos + len(prefix)
+
+        # The body ends at (and includes) the SOH immediately before "10=".
+        search_pattern = self.SOH + "10=" + checksum_field.raw_value
+        checksum_pos = normalized.rfind(search_pattern)
+        if checksum_pos == -1:
+            raise ValidationError("Cannot locate checksum for BodyLength validation")
+        body_end = checksum_pos + 1  # include the SOH preceding "10="
+
+        actual = body_end - body_start
+        if actual != declared:
+            raise ValidationError(f"BodyLength mismatch: declared {declared}, actual {actual}")
 
     def _validate_checksum(self, message: FixMessage, normalized: str) -> None:
         """Validate the message checksum.

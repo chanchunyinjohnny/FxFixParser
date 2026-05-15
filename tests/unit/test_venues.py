@@ -1,7 +1,5 @@
 """Unit tests for venue handlers."""
 
-import pytest
-
 from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.venues.bloomberg_dor import BloombergDORHandler
 from fxfixparser.venues.fxgo import FXGOHandler
@@ -10,7 +8,9 @@ from fxfixparser.venues.smart_trade import SmartTradeHandler
 from fxfixparser.venues.three_sixty_t import ThreeSixtyTHandler
 from tests.fixtures.sample_messages import (
     BLOOMBERG_DOR_SPOT_EXEC,
+    BLOOMBERG_DOR_SPOT_RFQ,
     FORWARD_MESSAGE,
+    SIMPLE_MESSAGE,
     SPOT_MESSAGE_PIPE,
     SWAP_MESSAGE,
 )
@@ -249,3 +249,34 @@ class TestVenueRegistry:
         handler = venue_registry.get_by_sender_id(msg.sender_comp_id)
         assert handler is not None
         assert handler.name == "Bloomberg DOR"
+
+    def test_detect_from_message_by_sender(self, venue_registry: VenueRegistry) -> None:
+        """detect_from_message resolves a venue from SenderCompID (49)."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        msg = parser.parse(BLOOMBERG_DOR_SPOT_EXEC)
+        handler = venue_registry.detect_from_message(msg)
+        assert handler is not None
+        assert handler.name == "Bloomberg DOR"
+
+    def test_detect_from_message_by_target(self, venue_registry: VenueRegistry) -> None:
+        """detect_from_message resolves client-to-venue messages via the
+        TargetCompID (56) / OnBehalfOfCompID (115) when the sender is the
+        client rather than the venue."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        msg = parser.parse(BLOOMBERG_DOR_SPOT_RFQ)
+
+        # Sender alone does not identify the venue here.
+        assert msg.sender_comp_id == "CLIENT"
+        assert venue_registry.get_by_sender_id(msg.sender_comp_id) is None
+
+        handler = venue_registry.detect_from_message(msg)
+        assert handler is not None
+        assert handler.name == "Bloomberg DOR"
+
+    def test_detect_from_message_returns_none_when_no_match(
+        self, venue_registry: VenueRegistry
+    ) -> None:
+        """detect_from_message returns None when no comp ID matches a venue."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        msg = parser.parse(SIMPLE_MESSAGE)
+        assert venue_registry.detect_from_message(msg) is None

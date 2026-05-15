@@ -65,7 +65,9 @@ class FixField:
             except ValueError:
                 logger.debug(
                     "Cannot convert tag %d (%s) value '%s' to int",
-                    self.tag, self.name, self.raw_value,
+                    self.tag,
+                    self.name,
+                    self.raw_value,
                 )
                 return self.raw_value
 
@@ -75,7 +77,9 @@ class FixField:
             except ValueError:
                 logger.debug(
                     "Cannot convert tag %d (%s) value '%s' to float",
-                    self.tag, self.name, self.raw_value,
+                    self.tag,
+                    self.name,
+                    self.raw_value,
                 )
                 return self.raw_value
 

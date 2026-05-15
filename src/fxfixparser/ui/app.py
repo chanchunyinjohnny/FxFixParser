@@ -1,6 +1,6 @@
 """Streamlit UI application for FxFixParser."""
 
-import json
+from typing import Any
 
 import streamlit as st
 
@@ -43,12 +43,18 @@ SAMPLE_MESSAGES = {
     "Market Data Incremental (7 entries)": (
         "8=FIX.4.4|9=0853|35=X|49=LFX|56=CLIENT|34=3|52=20190307-15:20:20.427|"
         "262=MDReqID_1|55=GBP/USD|64=20190311|268=7|"
-        "279=1|269=0|278=b-47005814236839174-3|280=2BNP51|270=1.31013|272=20190307|273=15:20:20.307|290=2|"
-        "279=1|269=0|278=b-47005814236839174-4|280=2BNP52|270=1.3101|272=20190307|273=15:20:20.307|290=3|"
-        "279=1|269=0|278=b-47005814236839174-8|280=2BNP53|270=1.31006|272=20190307|273=15:20:20.307|290=7|"
-        "279=1|269=1|278=o-47005814236839174-1|280=2BNP51|270=1.31026|272=20190307|273=15:20:20.307|290=0|"
-        "279=1|269=1|278=o-47005814236839174-2|280=2BNP52|270=1.31029|272=20190307|273=15:20:20.307|290=1|"
-        "279=0|269=1|278=o-47005814236839174-6|280=2BNP53|270=1.31035|271=10000000|15=GBP|272=20190307|273=15:20:20.307|276=A|282=QPU08|290=5|"
+        "279=1|269=0|278=b-47005814236839174-3|280=2BNP51|270=1.31013|"
+        "272=20190307|273=15:20:20.307|290=2|"
+        "279=1|269=0|278=b-47005814236839174-4|280=2BNP52|270=1.3101|"
+        "272=20190307|273=15:20:20.307|290=3|"
+        "279=1|269=0|278=b-47005814236839174-8|280=2BNP53|270=1.31006|"
+        "272=20190307|273=15:20:20.307|290=7|"
+        "279=1|269=1|278=o-47005814236839174-1|280=2BNP51|270=1.31026|"
+        "272=20190307|273=15:20:20.307|290=0|"
+        "279=1|269=1|278=o-47005814236839174-2|280=2BNP52|270=1.31029|"
+        "272=20190307|273=15:20:20.307|290=1|"
+        "279=0|269=1|278=o-47005814236839174-6|280=2BNP53|270=1.31035|"
+        "271=10000000|15=GBP|272=20190307|273=15:20:20.307|276=A|282=QPU08|290=5|"
         "279=2|269=1|280=7COBA0O3|10=028|"
     ),
     "Quote Request (Multiple Symbols)": (
@@ -131,7 +137,10 @@ def main() -> None:
             "Select Venue (optional)",
             options=venue_names,
             index=0,
-            help="Select a venue to use venue-specific tag definitions. Different venues may define custom tags differently.",
+            help=(
+                "Select a venue to use venue-specific tag definitions. "
+                "Different venues may define custom tags differently."
+            ),
         )
 
         st.divider()
@@ -173,15 +182,11 @@ def main() -> None:
         venue_to_use = None if selected_venue == "Auto-detect" else selected_venue
 
         try:
-            message = parser.parse(fix_input, venue=venue_to_use)
+            message = parser.parse(fix_input, venue=venue_to_use, auto_detect_venue=True)
 
-            # If no venue was specified, try to detect from SenderCompID
-            if venue_to_use is None:
-                venue_handler = venue_registry.get_by_sender_id(message.sender_comp_id)
-                if venue_handler:
-                    message = venue_handler.enhance_message(message)
-            else:
-                venue_handler = venue_registry.get(venue_to_use)
+            # Resolve the venue handler. The parser sets message.venue for
+            # both an explicit venue and one auto-detected from the comp IDs.
+            venue_handler = venue_registry.get(message.venue) if message.venue else None
 
             # Detect product type
             product_handler = product_registry.detect(message)
@@ -204,7 +209,7 @@ def main() -> None:
                 for sf in structured_fields:
                     if not sf.is_group and sf.field:
                         field = sf.field
-                        row = {}
+                        row: dict[str, Any] = {}
                         if show_tag:
                             row["Tag"] = field.tag
                         if show_field:
@@ -228,24 +233,29 @@ def main() -> None:
                 for sf in structured_fields:
                     if sf.is_group and sf.group:
                         group = sf.group
-                        st.markdown(f"### {group.count_field.name} ({group.count_field.tag}): {group.count} entries")
+                        st.markdown(
+                            f"### {group.count_field.name} ({group.count_field.tag}): "
+                            f"{group.count} entries"
+                        )
 
                         for entry in group.entries:
                             with st.expander(f"Entry {entry.index}", expanded=True):
                                 entry_data = []
                                 for field in entry.fields:
-                                    row = {}
+                                    entry_row: dict[str, Any] = {}
                                     if show_tag:
-                                        row["Tag"] = field.tag
+                                        entry_row["Tag"] = field.tag
                                     if show_field:
-                                        row["Field"] = field.name
+                                        entry_row["Field"] = field.name
                                     if show_field_desc:
-                                        row["Field Description"] = field.description or ""
+                                        entry_row["Field Description"] = field.description or ""
                                     if show_value:
-                                        row["Value"] = field.raw_value
+                                        entry_row["Value"] = field.raw_value
                                     if show_value_desc:
-                                        row["Value Description"] = field.value_description or ""
-                                    entry_data.append(row)
+                                        entry_row["Value Description"] = (
+                                            field.value_description or ""
+                                        )
+                                    entry_data.append(entry_row)
 
                                 if entry_data:
                                     st.dataframe(
@@ -287,16 +297,28 @@ def main() -> None:
 
                     # Explain bid/offer from both perspectives
                     if trade.symbol:
-                        base_ccy = trade.symbol.split("/")[0] if "/" in trade.symbol else trade.symbol[:3]
-                        quote_ccy = trade.symbol.split("/")[1] if "/" in trade.symbol else trade.symbol[3:]
-                        st.caption(f"**Bid**: Market maker buys {base_ccy}, sells {quote_ccy} (Client sells {base_ccy})")
-                        st.caption(f"**Offer**: Market maker sells {base_ccy}, buys {quote_ccy} (Client buys {base_ccy})")
+                        base_ccy = (
+                            trade.symbol.split("/")[0] if "/" in trade.symbol else trade.symbol[:3]
+                        )
+                        quote_ccy = (
+                            trade.symbol.split("/")[1] if "/" in trade.symbol else trade.symbol[3:]
+                        )
+                        st.caption(
+                            f"**Bid**: Market maker buys {base_ccy}, sells {quote_ccy}"
+                            f" (Client sells {base_ccy})"
+                        )
+                        st.caption(
+                            f"**Offer**: Market maker sells {base_ccy}, buys {quote_ccy}"
+                            f" (Client buys {base_ccy})"
+                        )
 
                     if trade.is_swap:
                         # Swap quote display
                         # Get tenors from message (display tenor only, not settlement dates)
                         near_tenor = message.get_value(63) or "Near"  # SettlType
-                        far_tenor = message.get_value(8004) or message.get_value(8005) or "Far"  # FarLegSettlType
+                        far_tenor = (
+                            message.get_value(8004) or message.get_value(8005) or "Far"
+                        )  # FarLegSettlType
 
                         st.markdown(f"##### {near_tenor} Leg")
                         near_data = {
@@ -306,12 +328,20 @@ def main() -> None:
                                 f"{trade.offer_spot_rate:.5f}" if trade.offer_spot_rate else "N/A",
                             ],
                             "Fwd Points": [
-                                f"{trade.bid_fwd_points:+.6f}" if trade.bid_fwd_points is not None else "N/A",
-                                f"{trade.offer_fwd_points:+.6f}" if trade.offer_fwd_points is not None else "N/A",
+                                f"{trade.bid_fwd_points:+.6f}"
+                                if trade.bid_fwd_points is not None
+                                else "N/A",
+                                f"{trade.offer_fwd_points:+.6f}"
+                                if trade.offer_fwd_points is not None
+                                else "N/A",
                             ],
                             "All-in Rate": [
-                                f"{trade.near_leg_bid_rate:.6f}" if trade.near_leg_bid_rate else (f"{trade.bid_price:.6f}" if trade.bid_price else "N/A"),
-                                f"{trade.near_leg_offer_rate:.6f}" if trade.near_leg_offer_rate else (f"{trade.offer_price:.6f}" if trade.offer_price else "N/A"),
+                                f"{trade.near_leg_bid_rate:.6f}"
+                                if trade.near_leg_bid_rate
+                                else (f"{trade.bid_price:.6f}" if trade.bid_price else "N/A"),
+                                f"{trade.near_leg_offer_rate:.6f}"
+                                if trade.near_leg_offer_rate
+                                else (f"{trade.offer_price:.6f}" if trade.offer_price else "N/A"),
                             ],
                         }
                         st.dataframe(near_data, use_container_width=True, hide_index=True)
@@ -320,12 +350,20 @@ def main() -> None:
                         far_data = {
                             "": ["Bid", "Offer"],
                             "Fwd Points": [
-                                f"{trade.far_bid_fwd_points:+.6f}" if trade.far_bid_fwd_points is not None else "N/A",
-                                f"{trade.far_offer_fwd_points:+.6f}" if trade.far_offer_fwd_points is not None else "N/A",
+                                f"{trade.far_bid_fwd_points:+.6f}"
+                                if trade.far_bid_fwd_points is not None
+                                else "N/A",
+                                f"{trade.far_offer_fwd_points:+.6f}"
+                                if trade.far_offer_fwd_points is not None
+                                else "N/A",
                             ],
                             "All-in Rate": [
-                                f"{trade.far_leg_bid_rate:.6f}" if trade.far_leg_bid_rate else "N/A",
-                                f"{trade.far_leg_offer_rate:.6f}" if trade.far_leg_offer_rate else "N/A",
+                                f"{trade.far_leg_bid_rate:.6f}"
+                                if trade.far_leg_bid_rate
+                                else "N/A",
+                                f"{trade.far_leg_offer_rate:.6f}"
+                                if trade.far_leg_offer_rate
+                                else "N/A",
                             ],
                         }
                         st.dataframe(far_data, use_container_width=True, hide_index=True)
@@ -334,8 +372,12 @@ def main() -> None:
                         swap_data = {
                             "": ["Bid", "Offer"],
                             "Swap Points": [
-                                f"{trade.bid_swap_points:+.6f}" if trade.bid_swap_points is not None else "N/A",
-                                f"{trade.offer_swap_points:+.6f}" if trade.offer_swap_points is not None else "N/A",
+                                f"{trade.bid_swap_points:+.6f}"
+                                if trade.bid_swap_points is not None
+                                else "N/A",
+                                f"{trade.offer_swap_points:+.6f}"
+                                if trade.offer_swap_points is not None
+                                else "N/A",
                             ],
                         }
                         st.dataframe(swap_data, use_container_width=True, hide_index=True)
@@ -360,8 +402,12 @@ def main() -> None:
                             ]
                         if trade.bid_fwd_points is not None or trade.offer_fwd_points is not None:
                             quote_data["Fwd Points"] = [
-                                f"{trade.bid_fwd_points:+.6f}" if trade.bid_fwd_points is not None else "N/A",
-                                f"{trade.offer_fwd_points:+.6f}" if trade.offer_fwd_points is not None else "N/A",
+                                f"{trade.bid_fwd_points:+.6f}"
+                                if trade.bid_fwd_points is not None
+                                else "N/A",
+                                f"{trade.offer_fwd_points:+.6f}"
+                                if trade.offer_fwd_points is not None
+                                else "N/A",
                             ]
                         st.dataframe(quote_data, use_container_width=True, hide_index=True)
 
@@ -391,9 +437,7 @@ def main() -> None:
 
     # Footer
     st.divider()
-    st.markdown(
-        "*FxFixParser - MIT License - Author: Chan Chun Yin Johnny*"
-    )
+    st.markdown("*FxFixParser - MIT License - Author: Chan Chun Yin Johnny*")
 
 
 if __name__ == "__main__":

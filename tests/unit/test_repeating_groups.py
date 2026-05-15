@@ -1,15 +1,8 @@
 """Unit tests for repeating groups functionality."""
 
-import pytest
-
 from fxfixparser.core.field import FixField, FixFieldDefinition
 from fxfixparser.core.message import FixMessage, RepeatingGroup, RepeatingGroupEntry
-from fxfixparser.tags.repeating_groups import (
-    REPEATING_GROUPS,
-    RepeatingGroupDefinition,
-    get_group_definition,
-    is_count_tag,
-)
+from fxfixparser.tags.repeating_groups import get_group_definition, is_count_tag
 
 
 class TestRepeatingGroupDefinitions:
@@ -52,8 +45,8 @@ class TestRepeatingGroupDefinitions:
         group = get_group_definition(146)
         assert group is not None
         # Standard FX swap tags
-        assert 63 in group.member_tags   # SettlType (near leg)
-        assert 64 in group.member_tags   # SettlDate (near leg)
+        assert 63 in group.member_tags  # SettlType (near leg)
+        assert 64 in group.member_tags  # SettlDate (near leg)
         assert 192 in group.member_tags  # OrderQty2 (far leg quantity)
         assert 193 in group.member_tags  # SettlDate2 (far leg date)
         # LFX custom tag for far leg tenor
@@ -81,15 +74,15 @@ class TestLFXForwardMDGrouping:
         fields = [
             FixField(tag=8, raw_value="FIX.4.4"),
             FixField(tag=35, raw_value="X"),
-            FixField(tag=268, raw_value="2"),   # NoMDEntries = 2
-            FixField(tag=279, raw_value="1"),   # MDUpdateAction
-            FixField(tag=269, raw_value="0"),   # MDEntryType = Bid
+            FixField(tag=268, raw_value="2"),  # NoMDEntries = 2
+            FixField(tag=279, raw_value="1"),  # MDUpdateAction
+            FixField(tag=269, raw_value="0"),  # MDEntryType = Bid
             FixField(tag=270, raw_value="1.180603"),  # MDEntryPx (all-in)
-            FixField(tag=290, raw_value="0"),   # MDEntryPositionNo
+            FixField(tag=290, raw_value="0"),  # MDEntryPositionNo
             FixField(tag=1026, raw_value="1.17905"),  # MDEntrySpotRate
             FixField(tag=1027, raw_value="0.001553"),  # MDEntryForwardPoints
-            FixField(tag=279, raw_value="1"),   # MDUpdateAction (entry 2)
-            FixField(tag=269, raw_value="1"),   # MDEntryType = Offer
+            FixField(tag=279, raw_value="1"),  # MDUpdateAction (entry 2)
+            FixField(tag=269, raw_value="1"),  # MDEntryType = Offer
             FixField(tag=270, raw_value="1.180668"),
             FixField(tag=290, raw_value="0"),
             FixField(tag=1026, raw_value="1.17911"),

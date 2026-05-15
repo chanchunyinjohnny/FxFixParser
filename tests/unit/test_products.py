@@ -80,7 +80,9 @@ class TestProductDetection:
         assert handler is not None
         assert handler.product_type == "NDF"
 
-    def test_detect_forward_by_tenor(self, parser: FixParser, product_registry: ProductRegistry) -> None:
+    def test_detect_forward_by_tenor(
+        self, parser: FixParser, product_registry: ProductRegistry
+    ) -> None:
         """Test detecting a forward from LFX tenor-based SettlType (e.g. M1)."""
         message = parser.parse(LFX_FORWARD_MD_MESSAGE)
         handler = product_registry.detect(message)
@@ -98,7 +100,9 @@ class TestProductDetection:
             )
             assert handler.detect(msg), f"Failed to detect forward for tenor {tenor}"
 
-    def test_detect_forward_by_md_entry_forward_points(self, parser: FixParser, product_registry: ProductRegistry) -> None:
+    def test_detect_forward_by_md_entry_forward_points(
+        self, parser: FixParser, product_registry: ProductRegistry
+    ) -> None:
         """Test detecting a forward from MDEntryForwardPoints (tag 1027) presence."""
         # Message without forward tenor in tag 63, but with tag 1027
         msg = parser.parse(
@@ -120,6 +124,43 @@ class TestProductDetection:
                 f"52=20240115-10:30:00|55=EUR/USD|63={tenor}|10=000|"
             )
             assert not handler.detect(msg), f"Incorrectly detected forward for spot tenor {tenor}"
+
+    def test_forward_handler_detects_bloomberg_tenor_tag_6215(self, parser: FixParser) -> None:
+        """ForwardHandler detects forwards from the Bloomberg tenor tag (6215)."""
+        handler = ForwardHandler()
+        for tenor in ["1M", "3M", "1W", "1Y", "M6"]:
+            msg = parser.parse(
+                f"8=FIXT.1.1|9=150|35=8|49=BLOOMBERG_DOR|56=CLIENT|34=1|"
+                f"52=20240115-10:30:00|55=EUR/USD|6215={tenor}|10=000|"
+            )
+            assert handler.detect(msg), f"Failed to detect forward for tenor 6215={tenor}"
+
+    def test_forward_handler_spot_tenor_6215_not_forward(self, parser: FixParser) -> None:
+        """ForwardHandler does not treat a spot tenor (6215=SP) as a forward."""
+        handler = ForwardHandler()
+        msg = parser.parse(
+            "8=FIXT.1.1|9=150|35=8|49=BLOOMBERG_DOR|56=CLIENT|34=1|"
+            "52=20240115-10:30:00|55=EUR/USD|6215=SP|10=000|"
+        )
+        assert not handler.detect(msg)
+
+    def test_detect_tenor_only_forward_not_spot(
+        self, parser: FixParser, product_registry: ProductRegistry
+    ) -> None:
+        """A Bloomberg tenor-only forward is classified as Forward, not Spot.
+
+        The message carries its tenor only in tag 6215 — no SecurityType
+        (167), SettlType (63), forward points (195) or MD forward points
+        (1027) — which previously fell through to the Spot fallback.
+        """
+        msg = parser.parse(
+            "8=FIXT.1.1|9=220|35=8|49=BLOOMBERG_DOR|56=CLIENT|34=1|"
+            "52=20240115-10:30:00|55=EUR/USD|54=1|32=1000000|31=1.09000|"
+            "15=EUR|64=20240415|6215=1M|10=000|"
+        )
+        handler = product_registry.detect(msg)
+        assert handler is not None
+        assert handler.product_type == "Forward"
 
     def test_extract_forward_details(self, parser: FixParser) -> None:
         """Test extracting forward-specific details."""

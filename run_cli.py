@@ -25,16 +25,15 @@ def parse_and_display(raw_message: str, output_format: str, venue_name: str | No
     product_registry = ProductRegistry.default()
 
     try:
-        message = parser.parse(raw_message, venue=venue_name)
+        message = parser.parse(
+            raw_message, venue=venue_name, auto_detect_venue=True
+        )
 
-        # Auto-detect venue from SenderCompID if not specified
-        venue_handler = None
-        if venue_name is None:
-            venue_handler = venue_registry.get_by_sender_id(message.sender_comp_id)
-            if venue_handler:
-                message = venue_handler.enhance_message(message)
-        else:
-            venue_handler = venue_registry.get(venue_name)
+        # Resolve the venue handler. The parser sets message.venue for both
+        # an explicit venue and one it auto-detected from the comp IDs.
+        venue_handler = (
+            venue_registry.get(message.venue) if message.venue else None
+        )
 
         # Detect product type
         product_handler = product_registry.detect(message)

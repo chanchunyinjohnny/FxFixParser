@@ -41,7 +41,9 @@ class RepeatingGroup:
         except ValueError:
             logger.warning(
                 "Non-numeric group count for %s (tag %d): '%s'",
-                self.name, self.count_field.tag, self.count_field.raw_value,
+                self.name,
+                self.count_field.tag,
+                self.count_field.raw_value,
             )
             return 0
 
@@ -166,7 +168,8 @@ class FixMessage:
                 except ValueError:
                     logger.warning(
                         "Non-numeric group count for tag %d: '%s'",
-                        current_field.tag, current_field.raw_value,
+                        current_field.tag,
+                        current_field.raw_value,
                     )
                     count = 0
 
@@ -221,7 +224,10 @@ class FixMessage:
                 if count > 0 and actual_count != count:
                     logger.warning(
                         "Group '%s' (tag %d) declared %d entries but found %d",
-                        group_def.name, current_field.tag, count, actual_count,
+                        group_def.name,
+                        current_field.tag,
+                        count,
+                        actual_count,
                     )
 
                 result.append(StructuredField(group=group))
@@ -242,7 +248,7 @@ class FixMessage:
         Returns:
             Dictionary representation of the message.
         """
-        base = {
+        base: dict[str, Any] = {
             "begin_string": self.begin_string,
             "msg_type": self.msg_type,
             "sender_comp_id": self.sender_comp_id,
@@ -289,7 +295,11 @@ class FixMessage:
             for sf in structured_fields:
                 if sf.is_group and sf.group:
                     group = sf.group
-                    lines.append(f"\n{group.count_field.name} ({group.count_field.tag}): {group.count} - {group.name}")
+                    lines.append(
+                        f"\n{group.count_field.name} "
+                        f"({group.count_field.tag}): "
+                        f"{group.count} - {group.name}"
+                    )
                     lines.append("=" * 40)
                     for entry in group.entries:
                         lines.append(f"  [Entry {entry.index}]")
@@ -366,22 +376,26 @@ class ParsedTrade:
             "settlement_currency": self.settlement_currency,
         }
         if self.is_quote:
-            result.update({
-                "bid_price": self.bid_price,
-                "offer_price": self.offer_price,
-                "bid_size": self.bid_size,
-                "offer_size": self.offer_size,
-                "bid_spot_rate": self.bid_spot_rate,
-                "offer_spot_rate": self.offer_spot_rate,
-                "bid_fwd_points": self.bid_fwd_points,
-                "offer_fwd_points": self.offer_fwd_points,
-            })
+            result.update(
+                {
+                    "bid_price": self.bid_price,
+                    "offer_price": self.offer_price,
+                    "bid_size": self.bid_size,
+                    "offer_size": self.offer_size,
+                    "bid_spot_rate": self.bid_spot_rate,
+                    "offer_spot_rate": self.offer_spot_rate,
+                    "bid_fwd_points": self.bid_fwd_points,
+                    "offer_fwd_points": self.offer_fwd_points,
+                }
+            )
         if self.is_swap:
-            result.update({
-                "far_settlement_date": self.far_settlement_date,
-                "far_bid_fwd_points": self.far_bid_fwd_points,
-                "far_offer_fwd_points": self.far_offer_fwd_points,
-                "bid_swap_points": self.bid_swap_points,
-                "offer_swap_points": self.offer_swap_points,
-            })
+            result.update(
+                {
+                    "far_settlement_date": self.far_settlement_date,
+                    "far_bid_fwd_points": self.far_bid_fwd_points,
+                    "far_offer_fwd_points": self.far_offer_fwd_points,
+                    "bid_swap_points": self.bid_swap_points,
+                    "offer_swap_points": self.offer_swap_points,
+                }
+            )
         return result

@@ -1,7 +1,5 @@
 """Unit tests for tag dictionary."""
 
-import pytest
-
 from fxfixparser.core.field import FixFieldDefinition
 from fxfixparser.tags.dictionary import TagDictionary
 from fxfixparser.tags.fix44 import FIX44_TAGS
@@ -161,7 +159,6 @@ class TestSmartTradeVendorTags:
     def test_8004_far_leg_tenor(self) -> None:
         """Test 8004 SettlType2 (Far Leg Tenor) tag per LFX spec."""
         from fxfixparser.venues.smart_trade import SmartTradeHandler
-        from fxfixparser.tags.fx_tags import LFX_TENOR_VALUES
 
         handler = SmartTradeHandler()
         tags_by_number = {t.tag: t for t in handler.custom_tags}
@@ -461,11 +458,30 @@ class TestSmartTradeVendorTags:
         # Months: M1-M11, M15, M18, M21
         # Years: Y1-Y10, Y15, Y20, Y25, Y30
         required_tenors = [
-            "SPOT", "TOM", "TOD", "SNX", "ONI", "TNX",
-            "W1", "W2", "W3",
-            "M1", "M2", "M3", "M4", "M5", "M6",
-            "M7", "M8", "M9", "M10", "M11", "M18",
-            "Y1", "Y2", "Y3",
+            "SPOT",
+            "TOM",
+            "TOD",
+            "SNX",
+            "ONI",
+            "TNX",
+            "W1",
+            "W2",
+            "W3",
+            "M1",
+            "M2",
+            "M3",
+            "M4",
+            "M5",
+            "M6",
+            "M7",
+            "M8",
+            "M9",
+            "M10",
+            "M11",
+            "M18",
+            "Y1",
+            "Y2",
+            "Y3",
         ]
 
         for tenor in required_tenors:
@@ -603,10 +619,7 @@ class TestVendorTagParsing:
         from fxfixparser.core.parser import FixParser, ParserConfig
         from fxfixparser.venues.registry import VenueRegistry
 
-        msg = (
-            "8=FIX.4.4|9=100|35=S|49=LFX|56=CLIENT|55=EUR/USD|"
-            "8000=BID123|8004=M1|10=123|"
-        )
+        msg = "8=FIX.4.4|9=100|35=S|49=LFX|56=CLIENT|55=EUR/USD|" "8000=BID123|8004=M1|10=123|"
 
         parser = FixParser(config=ParserConfig(strict_checksum=False))
         message = parser.parse(msg)

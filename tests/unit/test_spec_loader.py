@@ -61,9 +61,9 @@ class TestFIX44XMLLoader:
                 if not dictionary.has_tag(tag):
                     missing_tags.append(tag)
 
-        assert missing_tags == [], (
-            f"Tags referenced in repeating groups but not defined: {missing_tags}"
-        )
+        assert (
+            missing_tags == []
+        ), f"Tags referenced in repeating groups but not defined: {missing_tags}"
 
     def test_xml_tags_count(self) -> None:
         """Test that a reasonable number of tags are loaded from XML."""

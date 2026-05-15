@@ -6,11 +6,20 @@ from typing import Any
 from fxfixparser.core.message import FixMessage
 from fxfixparser.products.base import ProductHandler
 
-
-# Settlement type values that indicate spot (not forward)
+# Settlement / tenor values that indicate spot (not forward)
 SPOT_SETTL_TYPES = {
-    "0", "1", "2", "3", "C",  # Regular, Cash, NextDay, TPlus2, FXSpot
-    "SPOT", "TOD", "TOM", "ONI", "SNX", "TNX",  # Spot tenors
+    "0",
+    "1",
+    "2",
+    "3",
+    "C",  # Regular, Cash, NextDay, TPlus2, FXSpot
+    "SP",
+    "SPOT",
+    "TOD",
+    "TOM",
+    "ONI",
+    "SNX",
+    "TNX",  # Spot tenor codes
 }
 
 # Pattern for forward tenor codes: W1-W3, M1-M21, Y1-Y30, D2-D4,
@@ -37,6 +46,7 @@ class ForwardHandler(ProductHandler):
         - SecurityType (167) = FXFWD
         - SettlType (63) = 6 (Future) or B (BrokenDate)
         - SettlType (63) is a forward tenor code (e.g. M1, W2, Y1)
+        - Tenor (6215) is a forward tenor code (Bloomberg DOR, e.g. 1M, 3M)
         - Presence of forward points (tag 195 LastForwardPoints)
         - Presence of MD entry forward points (tag 1027 MDEntryForwardPoints)
         """
@@ -50,6 +60,13 @@ class ForwardHandler(ProductHandler):
 
         # Check for forward tenor codes (e.g. M1, W2, Y1, IMM dates)
         if settl_type and FORWARD_TENOR_PATTERN.match(settl_type):
+            return True
+
+        # Check the Bloomberg tenor tag (6215). Its format (e.g. 1M, 3M, 1Y)
+        # differs from SettlType codes, so anything that is not a recognised
+        # spot code is treated as a forward tenor.
+        tenor = message.get_value(6215)
+        if tenor and tenor.strip().upper() not in SPOT_SETTL_TYPES:
             return True
 
         # Check for forward points (execution reports / quotes)

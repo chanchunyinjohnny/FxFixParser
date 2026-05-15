@@ -5,12 +5,12 @@ import pytest
 from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.venues.bloomberg_dor import BloombergDORHandler
 from tests.fixtures.sample_messages import (
-    BLOOMBERG_DOR_SPOT_EXEC,
-    BLOOMBERG_DOR_FORWARD_EXEC,
-    BLOOMBERG_DOR_SWAP_EXEC,
     BLOOMBERG_DOR_ALGO_EXEC,
-    BLOOMBERG_DOR_SPOT_RFQ,
+    BLOOMBERG_DOR_FORWARD_EXEC,
+    BLOOMBERG_DOR_SPOT_EXEC,
     BLOOMBERG_DOR_SPOT_QUOTE,
+    BLOOMBERG_DOR_SPOT_RFQ,
+    BLOOMBERG_DOR_SWAP_EXEC,
 )
 
 
@@ -177,3 +177,37 @@ class TestBloombergDORTradeExtraction:
         assert trade.venue == "Bloomberg DOR"
         assert trade.symbol == "EUR/USD"
         assert trade.quantity == 1000000.0
+
+
+class TestBloombergDORSwapLegs:
+    """Tests for Bloomberg DOR swap leg repeating-group parsing."""
+
+    @pytest.fixture
+    def parser(self):
+        return FixParser(config=ParserConfig(strict_checksum=False))
+
+    def test_swap_legs_grouped_into_two_entries(self, parser):
+        """The NoLegs (555) group in a DOR swap yields both leg entries.
+
+        The sample declares 555=2; tag 1788 (LegID) appears inside each
+        leg, so it must be a recognised group member or the second leg is
+        dropped.
+        """
+        message = parser.parse(BLOOMBERG_DOR_SWAP_EXEC, venue="Bloomberg DOR")
+        structured = message.get_structured_fields()
+        legs = [
+            sf.group
+            for sf in structured
+            if sf.is_group and sf.group is not None and sf.group.count_field.tag == 555
+        ]
+        assert len(legs) == 1
+        legs_group = legs[0]
+        assert legs_group.count == 2
+        assert len(legs_group.entries) == 2
+
+    def test_leg_id_tag_resolves_to_named_field(self, parser):
+        """Tag 1788 (LegID) resolves to a named field under Bloomberg DOR."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_EXEC, venue="Bloomberg DOR")
+        field = message.get_field(1788)
+        assert field is not None
+        assert field.name == "LegID"

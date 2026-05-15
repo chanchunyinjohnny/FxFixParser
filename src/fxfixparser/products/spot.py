@@ -15,16 +15,16 @@ class SpotHandler(ProductHandler):
 
     # Message types that are trade-related (can have a product type)
     TRADE_MSG_TYPES = {
-        "8",   # ExecutionReport
-        "D",   # NewOrderSingle
-        "E",   # NewOrderList
-        "F",   # OrderCancelRequest
-        "G",   # OrderCancelReplaceRequest
-        "R",   # QuoteRequest
-        "S",   # Quote
-        "i",   # MassQuote
-        "W",   # MarketDataSnapshotFullRefresh
-        "X",   # MarketDataIncrementalRefresh
+        "8",  # ExecutionReport
+        "D",  # NewOrderSingle
+        "E",  # NewOrderList
+        "F",  # OrderCancelRequest
+        "G",  # OrderCancelReplaceRequest
+        "R",  # QuoteRequest
+        "S",  # Quote
+        "i",  # MassQuote
+        "W",  # MarketDataSnapshotFullRefresh
+        "X",  # MarketDataIncrementalRefresh
         "AE",  # TradeCaptureReport
         "AR",  # TradeCaptureReportRequest
     }

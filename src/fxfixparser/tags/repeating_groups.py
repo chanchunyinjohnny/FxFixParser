@@ -43,9 +43,9 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             290,  # MDEntryPositionNo
             291,  # FinancialStatus
             292,  # CorporateAction
-            15,   # Currency
-            64,   # SettlDate
-            40,   # OrdType
+            15,  # Currency
+            64,  # SettlDate
+            40,  # OrdType
             # Size/quantity fields within MD entries
             110,  # MinQty
             # Forward market data components
@@ -55,11 +55,11 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             9122,  # VenueEntryTime
             9123,  # VenueEntryDate
             # Additional standard tags that may appear in entries
-            37,   # OrderID
+            37,  # OrderID
             198,  # SecondaryOrderID
             336,  # TradingSessionID
             625,  # TradingSessionSubID
-            58,   # Text
+            58,  # Text
         },
     ),
     # Market Data entry types request
@@ -86,19 +86,19 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
         count_tag=146,  # NoRelatedSym
         name="Related Symbols",
         member_tags={
-            55,   # Symbol
-            65,   # SymbolSfx
-            48,   # SecurityID
-            22,   # SecurityIDSource
+            55,  # Symbol
+            65,  # SymbolSfx
+            48,  # SecurityID
+            22,  # SecurityIDSource
             167,  # SecurityType
             207,  # SecurityExchange
             106,  # Issuer
             107,  # SecurityDesc
-            15,   # Currency
-            64,   # SettlDate
-            54,   # Side
-            38,   # OrderQty
-            63,   # SettlType
+            15,  # Currency
+            64,  # SettlDate
+            54,  # Side
+            38,  # OrderQty
+            63,  # SettlType
             193,  # SettlDate2
             192,  # OrderQty2
             126,  # ExpireTime
@@ -146,6 +146,7 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             685,  # LegOrderQty (FIX 5.0+, added via fx_tags)
             686,  # LegPriceType
             687,  # LegQty
+            1788,  # LegID (FIX 5.0+; used by Bloomberg DOR swap legs)
         },
     ),
     # Allocations
@@ -153,13 +154,13 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
         count_tag=78,  # NoAllocs
         name="Allocations",
         member_tags={
-            79,   # AllocAccount
+            79,  # AllocAccount
             661,  # AllocAcctIDSource
             573,  # MatchStatus
             366,  # AllocPrice
-            80,   # AllocQty
+            80,  # AllocQty
             467,  # IndividualAllocID
-            81,   # ProcessCode
+            81,  # ProcessCode
             736,  # AllocSettlCurrency
             737,  # AllocSettlCurrAmt
             161,  # AllocText
@@ -170,9 +171,9 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
         count_tag=73,  # NoOrders
         name="Orders",
         member_tags={
-            11,   # ClOrdID
+            11,  # ClOrdID
             526,  # SecondaryClOrdID
-            67,   # ListSeqNo
+            67,  # ListSeqNo
             583,  # ClOrdLinkID
             160,  # SettlInstMode
         },
