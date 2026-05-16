@@ -1,6 +1,10 @@
 # FxFixParser
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://fx-fix-parser.streamlit.app/)
+
 A user-friendly tool for parsing FIX (Financial Information eXchange) protocol messages used in FX trading. Paste a raw FIX message and instantly see every tag translated into plain English — no manual spec lookup required.
+
+**Live app:** Try FxFixParser on Streamlit Cloud at [fx-fix-parser.streamlit.app](https://fx-fix-parser.streamlit.app/).
 
 ## What Does This Tool Do?
 
@@ -55,6 +59,12 @@ pip install -e ".[dev]"
 ```
 
 ### Launch the Web UI
+
+Use the hosted Streamlit app:
+
+[https://fx-fix-parser.streamlit.app/](https://fx-fix-parser.streamlit.app/)
+
+Or run it locally:
 
 ```bash
 python run_ui.py
