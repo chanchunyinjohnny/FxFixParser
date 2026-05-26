@@ -159,6 +159,23 @@ _BLOOMBERG_CUSTOM_TAGS: dict[int, FixFieldDefinition] = {
         description="Offshore indicator.",
         valid_values={"0": "Regular", "1": "Offshore", "2": "Onshore"},
     ),
+    1300: FixFieldDefinition(
+        tag=1300,
+        name="MarketSegmentID",
+        field_type="STRING",
+        description="Bloomberg market segment / execution facility identifier.",
+        valid_values={
+            "BETP": "Electronic Trading Platform",
+            "BGM": "Global Markets",
+            "BMTF": "Multilateral Trading Facility",
+            "BSEF": "Swaps Execution Facility",
+            "BTBS": "Bloomberg Trade Book Singapore",
+            "BTBU": "Bloomberg Trade Book United States",
+            "BTFE": "Bloomberg Trading Facility Europe",
+            "XCFE": "China Foreign Exchange Trade System",
+            "XOFF": "Off Facility",
+        },
+    ),
 }
 
 

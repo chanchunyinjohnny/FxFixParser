@@ -108,6 +108,31 @@ class TestBloombergDORCustomTags:
         assert "0" in offshore.valid_values
         assert "1" in offshore.valid_values
 
+        # MarketSegmentID (1300) — Bloomberg ORP execution-facility enums
+        assert 1300 in tags_by_number
+        market_segment = tags_by_number[1300]
+        assert market_segment.name == "MarketSegmentID"
+        assert market_segment.valid_values["BTBS"] == "Bloomberg Trade Book Singapore"
+        assert "BSEF" in market_segment.valid_values
+        assert "XOFF" in market_segment.valid_values
+
+    def test_tag_1300_resolves_in_bloomberg_dor_message(self) -> None:
+        """Tag 1300 in a Bloomberg ORP message resolves to MarketSegmentID with enum description."""
+        message_str = (
+            "8=FIXT.1.1|9=301|35=R|34=4|49=ORP_BCQT_B|52=20260522-08:53:49.606|"
+            "56=BLPORPBETA|115=DOR|128=DOR|1128=9|1129=1.0|1156=20|"
+            "131=1507426270445703168|146=1|55=EUR/USD|460=4|167=FXSPOT|38=1000000|"
+            "64=20260522|15=EUR|60=20260522-16:53:49.500|453=3|448=DOR1|447=D|452=1|"
+            "448=DOR2|447=D|452=1|448=29618590|447=D|452=11|1300=BTBS|10=174|"
+        )
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        message = parser.parse(message_str, venue="Bloomberg DOR")
+        field = message.get_field(1300)
+        assert field is not None
+        assert field.name == "MarketSegmentID"
+        assert field.raw_value == "BTBS"
+        assert field.value_description == "Bloomberg Trade Book Singapore"
+
 
 class TestBloombergDORTradeExtraction:
     """Tests for Bloomberg DOR trade extraction from parsed messages."""
