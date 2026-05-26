@@ -116,6 +116,31 @@ class TestBloombergDORCustomTags:
         assert "BSEF" in market_segment.valid_values
         assert "XOFF" in market_segment.valid_values
 
+    def test_fixt_session_tags_resolve(self) -> None:
+        """FIXT 1.1 session tags 1128/1129/1156 resolve via the shared dictionary."""
+        message_str = (
+            "8=FIXT.1.1|9=301|35=R|34=4|49=ORP_BCQT_B|52=20260522-08:53:49.606|"
+            "56=BLPORPBETA|115=DOR|128=DOR|1128=9|1129=1.0|1156=20|"
+            "131=1507426270445703168|146=1|55=EUR/USD|460=4|167=FXSPOT|38=1000000|"
+            "64=20260522|15=EUR|60=20260522-16:53:49.500|453=3|448=DOR1|447=D|452=1|"
+            "448=DOR2|447=D|452=1|448=29618590|447=D|452=11|1300=BTBS|10=174|"
+        )
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        message = parser.parse(message_str, venue="Bloomberg DOR")
+
+        appl_ver = message.get_field(1128)
+        assert appl_ver is not None
+        assert appl_ver.name == "ApplVerID"
+        assert appl_ver.value_description == "FIX 5.0 SP2"
+
+        cstm = message.get_field(1129)
+        assert cstm is not None
+        assert cstm.name == "CstmApplVerID"
+
+        ext = message.get_field(1156)
+        assert ext is not None
+        assert ext.name == "ApplExtID"
+
     def test_tag_1300_resolves_in_bloomberg_dor_message(self) -> None:
         """Tag 1300 in a Bloomberg ORP message resolves to MarketSegmentID with enum description."""
         message_str = (

@@ -99,6 +99,37 @@ FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
         "Indicator to identify whether this fill was a result of a "
         "liquidity provider providing or taking liquidity.",
     ),
+    # FIXT 1.1 session-layer / application version identifiers
+    FixFieldDefinition(
+        1128,
+        "ApplVerID",
+        "STRING",
+        "Application Version ID. Specifies the service pack release being applied at message level.",
+        {
+            "0": "FIX 2.7",
+            "1": "FIX 3.0",
+            "2": "FIX 4.0",
+            "3": "FIX 4.1",
+            "4": "FIX 4.2",
+            "5": "FIX 4.3",
+            "6": "FIX 4.4",
+            "7": "FIX 5.0",
+            "8": "FIX 5.0 SP1",
+            "9": "FIX 5.0 SP2",
+        },
+    ),
+    FixFieldDefinition(
+        1129,
+        "CstmApplVerID",
+        "STRING",
+        "Custom Application Version ID. Specifies a custom extension to the message's application version.",
+    ),
+    FixFieldDefinition(
+        1156,
+        "ApplExtID",
+        "INT",
+        "Application Extension ID. Specifies the FIX EP that defined a message extension.",
+    ),
     # ============================================================================
     # LiquidityFX (LFX) Custom Tags - 8000 Range
     # Based on smartTrade LiquidityFX Distribution FIX ROE v4.2.78.0-GA
