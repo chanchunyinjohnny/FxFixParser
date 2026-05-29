@@ -5,9 +5,13 @@ import pytest
 from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.products.base import ProductRegistry
 from fxfixparser.venues.registry import VenueRegistry
+from fxfixparser.venues.sgx_titan_otc import SGXTitanOTCHandler
 from tests.fixtures.sample_messages import (
     FORWARD_MESSAGE,
     NDF_MESSAGE,
+    SGX_TITAN_OTC_KU_TRADE_CAPTURE,
+    SGX_TITAN_OTC_KUTM_FLEXC_TRADE_CAPTURE,
+    SGX_TITAN_OTC_UC_EXEC_REPORT,
     SPOT_MESSAGE_PIPE,
     SPOT_MESSAGE_SOH,
     SWAP_MESSAGE,
@@ -220,3 +224,60 @@ class TestFullParseWorkflow:
         assert trade.price == 1320.50
         assert trade.currency == "USD"
         assert trade.venue == "FXGO"
+
+
+class TestSGXFXFuturesRoundTrip:
+    """Round-trip integration tests for SGX Titan OTC FX futures messages."""
+
+    @pytest.fixture
+    def parser(self) -> FixParser:
+        return FixParser(config=ParserConfig(strict_checksum=False))
+
+    @pytest.fixture
+    def product_registry(self) -> ProductRegistry:
+        return ProductRegistry.default()
+
+    def test_ku_trade_capture_report_round_trip(
+        self, parser: FixParser, product_registry: ProductRegistry
+    ) -> None:
+        msg = parser.parse(SGX_TITAN_OTC_KU_TRADE_CAPTURE, auto_detect_venue=True)
+
+        assert msg.venue == "SGX Titan OTC"
+        assert msg.venue_extras.get("product_name") == "KRW/USD FX Futures"
+
+        trade = SGXTitanOTCHandler().extract_trade(msg)
+        assert trade.symbol == "KU"
+
+        product = product_registry.detect(msg)
+        assert product is not None
+        assert product.product_type == "Futures"
+        details = product.extract_details(msg)
+        assert details["product_code"] == "KU"
+        assert details["product_name"] == "KRW/USD FX Futures"
+
+    def test_kutm_flexc_round_trip(
+        self, parser: FixParser, product_registry: ProductRegistry
+    ) -> None:
+        msg = parser.parse(
+            SGX_TITAN_OTC_KUTM_FLEXC_TRADE_CAPTURE,
+            auto_detect_venue=True,
+        )
+        assert msg.venue == "SGX Titan OTC"
+
+        product = product_registry.detect(msg)
+        assert product is not None
+        details = product.extract_details(msg)
+        assert details["product_code"] == "KUTM"
+        assert details["product_name"] == "KRW/USD FlexC FX Futures"
+
+    def test_uc_exec_report_round_trip(
+        self, parser: FixParser, product_registry: ProductRegistry
+    ) -> None:
+        msg = parser.parse(SGX_TITAN_OTC_UC_EXEC_REPORT, auto_detect_venue=True)
+        assert msg.venue == "SGX Titan OTC"
+
+        product = product_registry.detect(msg)
+        assert product is not None
+        details = product.extract_details(msg)
+        assert details["product_code"] == "UC"
+        assert details["product_name"] == "USD/CNH FX Futures"

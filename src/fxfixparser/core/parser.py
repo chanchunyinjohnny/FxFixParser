@@ -94,9 +94,11 @@ class FixParser:
                     raw_message=raw_message,
                 )
 
-        # Set venue on message if specified or detected
+        # Apply venue enrichment (also sets message.venue) when a handler
+        # is specified or was auto-detected. This invokes any venue-
+        # specific logic like SGX Titan OTC's product-name lookup.
         if venue_handler:
-            message.venue = venue_handler.name
+            message = venue_handler.enhance_message(message)
 
         self._validate_structure(message, normalized)
 

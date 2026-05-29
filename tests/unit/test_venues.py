@@ -1,5 +1,7 @@
 """Unit tests for venue handlers."""
 
+from fxfixparser.core.field import FixField
+from fxfixparser.core.message import FixMessage
 from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.venues.bloomberg_dor import BloombergDORHandler
 from fxfixparser.venues.fxgo import FXGOHandler
@@ -280,3 +282,35 @@ class TestVenueRegistry:
         parser = FixParser(config=ParserConfig(strict_checksum=False))
         msg = parser.parse(SIMPLE_MESSAGE)
         assert venue_registry.detect_from_message(msg) is None
+
+
+class TestSymbolFallback:
+    """Symbol resolution when tag 55 is missing or sentinel."""
+
+    def _trade(self, tag_values):
+        msg = FixMessage(fields=[FixField(tag=t, raw_value=v) for t, v in tag_values.items()])
+        return BloombergDORHandler().extract_trade(msg)
+
+    def test_uses_tag_55_when_present(self):
+        trade = self._trade({35: "AE", 55: "USDJPY"})
+        assert trade.symbol == "USDJPY"
+
+    def test_falls_back_to_security_id_when_tag_55_missing(self):
+        trade = self._trade({35: "AE", 48: "KU"})
+        assert trade.symbol == "KU"
+
+    def test_falls_back_when_tag_55_is_na_sentinel(self):
+        trade = self._trade({35: "AE", 55: "[N/A]", 48: "KU"})
+        assert trade.symbol == "KU"
+
+    def test_falls_back_to_security_desc_when_no_security_id(self):
+        trade = self._trade({35: "AE", 55: "[N/A]", 107: "KRW_USD FX Futures"})
+        assert trade.symbol == "KRW_USD FX Futures"
+
+    def test_falls_back_to_product_complex_last(self):
+        trade = self._trade({35: "AE", 55: "[N/A]", 1227: "SGX KRW/USD FX FUTURES"})
+        assert trade.symbol == "SGX KRW/USD FX FUTURES"
+
+    def test_blank_symbol_treated_as_missing(self):
+        trade = self._trade({35: "AE", 55: "   ", 48: "KU"})
+        assert trade.symbol == "KU"

@@ -17,16 +17,18 @@ class FuturesHandler(ProductHandler):
         """Detect if this is a futures trade.
 
         Futures is identified by:
-        - SecurityType (167) = FUT
-        - Or presence of MaturityMonthYear (200) with exchange
-        - Or presence of SecurityExchange (207) with FX symbol
+        - SecurityType (167) = FUT, or
+        - MaturityMonthYear (200) + SecurityExchange (207) both present, or
+        - MarketSegmentID (1300) = FX with a SecurityID (48) (SGX style)
         """
         security_type = message.get_value(167)
         if security_type and security_type.upper() == "FUT":
             return True
 
-        # Check for maturity month/year with exchange
         if message.get_value(200) and message.get_value(207):
+            return True
+
+        if message.get_value(1300) == "FX" and message.get_value(48):
             return True
 
         return False
@@ -37,4 +39,12 @@ class FuturesHandler(ProductHandler):
         details["maturity_date"] = message.get_value(541)
         details["security_exchange"] = message.get_value(207)
         details["contract_multiplier"] = message.get_value(231)
+        details["product_code"] = message.get_value(48)
+        # Prefer the venue-supplied canonical name (e.g. SGX enrichment),
+        # then ProductComplex (1227), then SecurityDesc (107).
+        details["product_name"] = (
+            message.venue_extras.get("product_name")
+            or message.get_value(1227)
+            or message.get_value(107)
+        )
         return details

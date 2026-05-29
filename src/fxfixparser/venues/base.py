@@ -36,10 +36,17 @@ class VenueHandler(ABC):
         trade = ParsedTrade(venue=self.name)
         msg_type = message.msg_type
 
-        # Extract common fields
+        # Extract common fields. Tag 55 may be missing or a sentinel
+        # ("[N/A]") on venues like SGX Titan OTC that put the product code
+        # in tag 48 (SecurityID); fall back to 48 -> 107 (SecurityDesc) ->
+        # 1227 (ProductComplex).
         symbol = message.get_value(55)
-        if symbol:
+        if symbol and symbol.strip() and symbol != "[N/A]":
             trade.symbol = symbol
+        else:
+            trade.symbol = (
+                message.get_value(48) or message.get_value(107) or message.get_value(1227)
+            )
 
         # Handle different message types
         if msg_type == "S":  # Quote

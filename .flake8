@@ -1,6 +1,8 @@
 [flake8]
 max-line-length = 100
 select = E,F,W
+# W503 (line break before binary operator) is intentional black style; suppress it
+extend-ignore = W503
 exclude =
     .venv,
     build,

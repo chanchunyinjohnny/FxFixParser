@@ -79,6 +79,7 @@ class FixMessage:
     raw_message: str = ""
     venue: str | None = None
     product_type: str | None = None
+    venue_extras: dict[str, str] = field(default_factory=dict)
 
     def get_field(self, tag: int) -> FixField | None:
         """Get the first field with the given tag number."""
@@ -255,6 +256,7 @@ class FixMessage:
             "target_comp_id": self.target_comp_id,
             "venue": self.venue,
             "product_type": self.product_type,
+            "venue_extras": self.venue_extras,
         }
 
         if structured:

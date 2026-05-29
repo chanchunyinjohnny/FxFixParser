@@ -425,6 +425,22 @@ def main() -> None:
                         st.metric("Venue", trade.venue or "N/A")
                         st.metric("Product", message.product_type or "N/A")
 
+                    # Surface FX futures product detail (product_code/name)
+                    # when the product handler can supply them. This is
+                    # what makes SGX FX futures messages legible — without
+                    # this, a KU/KUTM/UC code stays opaque in the UI.
+                    if product_handler is not None:
+                        details = product_handler.extract_details(message)
+                        product_code = details.get("product_code")
+                        product_name = details.get("product_name")
+                        if product_code or product_name:
+                            parts = []
+                            if product_code:
+                                parts.append(f"**Product Code:** `{product_code}`")
+                            if product_name:
+                                parts.append(f"**Product Name:** {product_name}")
+                            st.caption(" &nbsp;·&nbsp; ".join(parts))
+
         except ChecksumError as e:
             st.error(f"Checksum Error: {e}")
         except ValidationError as e:

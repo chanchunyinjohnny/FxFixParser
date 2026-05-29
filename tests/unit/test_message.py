@@ -193,6 +193,26 @@ class TestFixMessage:
         assert d["venue"] == "TestVenue"
         assert len(d["fields"]) == 3
 
+    def test_venue_extras_defaults_to_empty_dict(self) -> None:
+        """venue_extras defaults to an empty dict on a new FixMessage."""
+        msg = FixMessage()
+        assert msg.venue_extras == {}
+
+    def test_venue_extras_is_mutable_per_instance(self) -> None:
+        """venue_extras is independent per instance (no shared mutable default)."""
+        a = FixMessage()
+        b = FixMessage()
+        a.venue_extras["product_name"] = "KRW/USD FX Futures"
+        assert b.venue_extras == {}
+        assert a.venue_extras == {"product_name": "KRW/USD FX Futures"}
+
+    def test_to_dict_includes_venue_extras(self) -> None:
+        """to_dict() serialises venue_extras so downstream consumers see it."""
+        msg = FixMessage()
+        msg.venue_extras["product_name"] = "KRW/USD FX Futures"
+        result = msg.to_dict()
+        assert result["venue_extras"] == {"product_name": "KRW/USD FX Futures"}
+
 
 class TestParsedTrade:
     """Tests for ParsedTrade class."""

@@ -202,3 +202,73 @@ class TestProductRegistry:
         """Test default registry has all handlers."""
         # The registry doesn't expose handlers list, but we can test it works
         assert product_registry is not None
+
+
+class TestFuturesSGXDetection:
+    def _msg(self, tag_values):
+        from fxfixparser.core.field import FixField
+        from fxfixparser.core.message import FixMessage
+
+        return FixMessage(fields=[FixField(tag=t, raw_value=v) for t, v in tag_values.items()])
+
+    def test_detects_via_security_type_fut(self):
+        from fxfixparser.products.futures import FuturesHandler
+
+        msg = self._msg({167: "FUT"})
+        assert FuturesHandler().detect(msg) is True
+
+    def test_detects_via_maturity_and_exchange(self):
+        from fxfixparser.products.futures import FuturesHandler
+
+        msg = self._msg({200: "202506", 207: "XSGX"})
+        assert FuturesHandler().detect(msg) is True
+
+    def test_detects_via_sgx_style_fx_asset_class(self):
+        # 1300=FX + SecurityID (48) — no SecurityType, no exchange.
+        from fxfixparser.products.futures import FuturesHandler
+
+        msg = self._msg({1300: "FX", 48: "KU"})
+        assert FuturesHandler().detect(msg) is True
+
+    def test_does_not_detect_random_message(self):
+        from fxfixparser.products.futures import FuturesHandler
+
+        msg = self._msg({35: "D", 55: "USDJPY"})
+        assert FuturesHandler().detect(msg) is False
+
+
+class TestFuturesExtractDetailsProductName:
+    def _msg(self, tag_values, venue_extras=None):
+        from fxfixparser.core.field import FixField
+        from fxfixparser.core.message import FixMessage
+
+        msg = FixMessage(fields=[FixField(tag=t, raw_value=v) for t, v in tag_values.items()])
+        if venue_extras:
+            msg.venue_extras = dict(venue_extras)
+        return msg
+
+    def test_uses_venue_extras_product_name_when_present(self):
+        from fxfixparser.products.futures import FuturesHandler
+
+        msg = self._msg(
+            {200: "202506", 48: "KU", 107: "KRW_USD FX Futures"},
+            venue_extras={"product_name": "KRW/USD FX Futures"},
+        )
+        details = FuturesHandler().extract_details(msg)
+        assert details["product_code"] == "KU"
+        assert details["product_name"] == "KRW/USD FX Futures"
+
+    def test_falls_back_to_product_complex_then_security_desc(self):
+        from fxfixparser.products.futures import FuturesHandler
+
+        msg = self._msg({200: "202506", 48: "KU", 1227: "SGX KRW/USD FUTURES"})
+        details = FuturesHandler().extract_details(msg)
+        assert details["product_code"] == "KU"
+        assert details["product_name"] == "SGX KRW/USD FUTURES"
+
+    def test_no_product_name_when_no_source(self):
+        from fxfixparser.products.futures import FuturesHandler
+
+        msg = self._msg({200: "202506"})
+        details = FuturesHandler().extract_details(msg)
+        assert details.get("product_name") is None
