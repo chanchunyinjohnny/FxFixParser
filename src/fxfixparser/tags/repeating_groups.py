@@ -81,6 +81,30 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             802,  # NoPartySubIDs (nested group)
         },
     ),
+    # Sides (Trade Capture Report side-level details)
+    RepeatingGroupDefinition(
+        count_tag=552,  # NoSides
+        name="Sides",
+        member_tags={
+            54,  # Side
+            1,  # Account
+            11,  # ClOrdID
+            15,  # Currency
+            31,  # LastPx
+            32,  # LastQty
+            37,  # OrderID
+            38,  # OrderQty
+            44,  # Price
+            58,  # Text
+            120,  # SettlCurrency
+            1005,  # SideTradeReportID
+            1009,  # SideLastQty
+            1427,  # SideExecID
+            1506,  # SideTradeID
+            1507,  # SideOrigTradeID
+            1597,  # SideClearingTradePrice
+        },
+    ),
     # Related symbols (Quote Request, Market Data Request)
     RepeatingGroupDefinition(
         count_tag=146,  # NoRelatedSym

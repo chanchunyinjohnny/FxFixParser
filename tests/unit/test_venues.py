@@ -1,7 +1,9 @@
 """Unit tests for venue handlers."""
 
+from typing import Mapping
+
 from fxfixparser.core.field import FixField
-from fxfixparser.core.message import FixMessage
+from fxfixparser.core.message import FixMessage, ParsedTrade
 from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.venues.bloomberg_dor import BloombergDORHandler
 from fxfixparser.venues.fxgo import FXGOHandler
@@ -204,9 +206,12 @@ class TestVenueRegistry:
         registry.register(FXGOHandler())
         registry.register(SmartTradeHandler())
 
-        assert registry.get_by_sender_id("FXGO") is not None
-        assert registry.get_by_sender_id("FXGO").name == "FXGO"
-        assert registry.get_by_sender_id("SMARTTRADE").name == "Smart Trade (LiquidityFX)"
+        fxgo = registry.get_by_sender_id("FXGO")
+        smart_trade = registry.get_by_sender_id("SMARTTRADE")
+        assert fxgo is not None
+        assert smart_trade is not None
+        assert fxgo.name == "FXGO"
+        assert smart_trade.name == "Smart Trade (LiquidityFX)"
         assert registry.get_by_sender_id("UNKNOWN") is None
 
     def test_default_registry(self, venue_registry: VenueRegistry) -> None:
@@ -287,30 +292,30 @@ class TestVenueRegistry:
 class TestSymbolFallback:
     """Symbol resolution when tag 55 is missing or sentinel."""
 
-    def _trade(self, tag_values):
+    def _trade(self, tag_values: Mapping[int, str]) -> ParsedTrade:
         msg = FixMessage(fields=[FixField(tag=t, raw_value=v) for t, v in tag_values.items()])
         return BloombergDORHandler().extract_trade(msg)
 
-    def test_uses_tag_55_when_present(self):
+    def test_uses_tag_55_when_present(self) -> None:
         trade = self._trade({35: "AE", 55: "USDJPY"})
         assert trade.symbol == "USDJPY"
 
-    def test_falls_back_to_security_id_when_tag_55_missing(self):
+    def test_falls_back_to_security_id_when_tag_55_missing(self) -> None:
         trade = self._trade({35: "AE", 48: "KU"})
         assert trade.symbol == "KU"
 
-    def test_falls_back_when_tag_55_is_na_sentinel(self):
+    def test_falls_back_when_tag_55_is_na_sentinel(self) -> None:
         trade = self._trade({35: "AE", 55: "[N/A]", 48: "KU"})
         assert trade.symbol == "KU"
 
-    def test_falls_back_to_security_desc_when_no_security_id(self):
+    def test_falls_back_to_security_desc_when_no_security_id(self) -> None:
         trade = self._trade({35: "AE", 55: "[N/A]", 107: "KRW_USD FX Futures"})
         assert trade.symbol == "KRW_USD FX Futures"
 
-    def test_falls_back_to_product_complex_last(self):
+    def test_falls_back_to_product_complex_last(self) -> None:
         trade = self._trade({35: "AE", 55: "[N/A]", 1227: "SGX KRW/USD FX FUTURES"})
         assert trade.symbol == "SGX KRW/USD FX FUTURES"
 
-    def test_blank_symbol_treated_as_missing(self):
+    def test_blank_symbol_treated_as_missing(self) -> None:
         trade = self._trade({35: "AE", 55: "   ", 48: "KU"})
         assert trade.symbol == "KU"

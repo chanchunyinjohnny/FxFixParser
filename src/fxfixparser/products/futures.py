@@ -28,7 +28,11 @@ class FuturesHandler(ProductHandler):
         if message.get_value(200) and message.get_value(207):
             return True
 
-        if message.get_value(1300) == "FX" and message.get_value(48):
+        if (
+            message.venue == "SGX Titan OTC"
+            and message.get_value(1300) == "FX"
+            and message.get_value(48)
+        ):
             return True
 
         return False

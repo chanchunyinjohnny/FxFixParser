@@ -10,7 +10,7 @@ dictionary at parse time (see core/parser.py::_get_dictionary_for_venue).
 """
 
 from fxfixparser.core.field import FixFieldDefinition
-from fxfixparser.core.message import FixMessage
+from fxfixparser.core.message import FixMessage, ParsedTrade
 from fxfixparser.venues.base import VenueHandler
 
 # SGX FX futures product code -> human-readable name. Codes are the value
@@ -258,3 +258,9 @@ class SGXTitanOTCHandler(VenueHandler):
             if name:
                 message.venue_extras["product_name"] = name
         return message
+
+    def extract_trade(self, message: FixMessage) -> ParsedTrade:
+        trade = super().extract_trade(message)
+        trade.order_id = trade.order_id or message.get_value(571)
+        trade.exec_id = trade.exec_id or message.get_value(1003) or message.get_value(1005)
+        return trade

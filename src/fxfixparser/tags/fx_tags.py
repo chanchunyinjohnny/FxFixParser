@@ -79,6 +79,18 @@ FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
         685, "LegOrderQty", "QTY", "Order quantity for a leg of a multi-leg instrument."
     ),
     FixFieldDefinition(
+        1005,
+        "SideTradeReportID",
+        "STRING",
+        "Side-level trade report identifier within a Trade Capture Report.",
+    ),
+    FixFieldDefinition(
+        1009,
+        "SideLastQty",
+        "QTY",
+        "Side-level last quantity within a Trade Capture Report.",
+    ),
+    FixFieldDefinition(
         1788,
         "LegID",
         "STRING",
@@ -99,12 +111,37 @@ FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
         "Indicator to identify whether this fill was a result of a "
         "liquidity provider providing or taking liquidity.",
     ),
+    FixFieldDefinition(
+        1427,
+        "SideExecID",
+        "STRING",
+        "Side-level execution identifier within a Trade Capture Report.",
+    ),
+    FixFieldDefinition(
+        1506,
+        "SideTradeID",
+        "STRING",
+        "Side-level trade identifier within a Trade Capture Report.",
+    ),
+    FixFieldDefinition(
+        1507,
+        "SideOrigTradeID",
+        "STRING",
+        "Original side-level trade identifier within a Trade Capture Report.",
+    ),
+    FixFieldDefinition(
+        1597,
+        "SideClearingTradePrice",
+        "PRICE",
+        "Side-level clearing trade price within a Trade Capture Report.",
+    ),
     # FIXT 1.1 session-layer / application version identifiers
     FixFieldDefinition(
         1128,
         "ApplVerID",
         "STRING",
-        "Application Version ID. Specifies the service pack release being applied at message level.",
+        "Application Version ID. Specifies the service pack release being applied "
+        "at message level.",
         {
             "0": "FIX 2.7",
             "1": "FIX 3.0",
@@ -122,7 +159,8 @@ FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
         1129,
         "CstmApplVerID",
         "STRING",
-        "Custom Application Version ID. Specifies a custom extension to the message's application version.",
+        "Custom Application Version ID. Specifies a custom extension to the "
+        "message's application version.",
     ),
     FixFieldDefinition(
         1156,

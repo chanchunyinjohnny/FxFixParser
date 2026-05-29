@@ -1,7 +1,11 @@
 """Unit tests for product type handlers."""
 
+from typing import Mapping
+
 import pytest
 
+from fxfixparser.core.field import FixField
+from fxfixparser.core.message import FixMessage
 from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.products.base import ProductRegistry
 from fxfixparser.products.forward import ForwardHandler
@@ -205,32 +209,42 @@ class TestProductRegistry:
 
 
 class TestFuturesSGXDetection:
-    def _msg(self, tag_values):
-        from fxfixparser.core.field import FixField
-        from fxfixparser.core.message import FixMessage
+    def _msg(
+        self,
+        tag_values: Mapping[int, str],
+        venue: str | None = None,
+    ) -> FixMessage:
+        return FixMessage(
+            fields=[FixField(tag=t, raw_value=v) for t, v in tag_values.items()],
+            venue=venue,
+        )
 
-        return FixMessage(fields=[FixField(tag=t, raw_value=v) for t, v in tag_values.items()])
-
-    def test_detects_via_security_type_fut(self):
+    def test_detects_via_security_type_fut(self) -> None:
         from fxfixparser.products.futures import FuturesHandler
 
         msg = self._msg({167: "FUT"})
         assert FuturesHandler().detect(msg) is True
 
-    def test_detects_via_maturity_and_exchange(self):
+    def test_detects_via_maturity_and_exchange(self) -> None:
         from fxfixparser.products.futures import FuturesHandler
 
         msg = self._msg({200: "202506", 207: "XSGX"})
         assert FuturesHandler().detect(msg) is True
 
-    def test_detects_via_sgx_style_fx_asset_class(self):
+    def test_detects_via_sgx_style_fx_asset_class(self) -> None:
         # 1300=FX + SecurityID (48) — no SecurityType, no exchange.
         from fxfixparser.products.futures import FuturesHandler
 
-        msg = self._msg({1300: "FX", 48: "KU"})
+        msg = self._msg({1300: "FX", 48: "KU"}, venue="SGX Titan OTC")
         assert FuturesHandler().detect(msg) is True
 
-    def test_does_not_detect_random_message(self):
+    def test_does_not_detect_non_sgx_market_segment_fx(self) -> None:
+        from fxfixparser.products.futures import FuturesHandler
+
+        msg = self._msg({35: "D", 1300: "FX", 48: "ABC"}, venue="Other Venue")
+        assert FuturesHandler().detect(msg) is False
+
+    def test_does_not_detect_random_message(self) -> None:
         from fxfixparser.products.futures import FuturesHandler
 
         msg = self._msg({35: "D", 55: "USDJPY"})
@@ -238,16 +252,17 @@ class TestFuturesSGXDetection:
 
 
 class TestFuturesExtractDetailsProductName:
-    def _msg(self, tag_values, venue_extras=None):
-        from fxfixparser.core.field import FixField
-        from fxfixparser.core.message import FixMessage
-
+    def _msg(
+        self,
+        tag_values: Mapping[int, str],
+        venue_extras: Mapping[str, str] | None = None,
+    ) -> FixMessage:
         msg = FixMessage(fields=[FixField(tag=t, raw_value=v) for t, v in tag_values.items()])
         if venue_extras:
             msg.venue_extras = dict(venue_extras)
         return msg
 
-    def test_uses_venue_extras_product_name_when_present(self):
+    def test_uses_venue_extras_product_name_when_present(self) -> None:
         from fxfixparser.products.futures import FuturesHandler
 
         msg = self._msg(
@@ -258,7 +273,7 @@ class TestFuturesExtractDetailsProductName:
         assert details["product_code"] == "KU"
         assert details["product_name"] == "KRW/USD FX Futures"
 
-    def test_falls_back_to_product_complex_then_security_desc(self):
+    def test_falls_back_to_product_complex_then_security_desc(self) -> None:
         from fxfixparser.products.futures import FuturesHandler
 
         msg = self._msg({200: "202506", 48: "KU", 1227: "SGX KRW/USD FUTURES"})
@@ -266,7 +281,7 @@ class TestFuturesExtractDetailsProductName:
         assert details["product_code"] == "KU"
         assert details["product_name"] == "SGX KRW/USD FUTURES"
 
-    def test_no_product_name_when_no_source(self):
+    def test_no_product_name_when_no_source(self) -> None:
         from fxfixparser.products.futures import FuturesHandler
 
         msg = self._msg({200: "202506"})
