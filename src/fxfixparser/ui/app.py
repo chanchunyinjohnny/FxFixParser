@@ -119,7 +119,7 @@ def main() -> None:
     )
 
     st.title("FX FIX Message Parser")
-    st.markdown("Parse FIX 4.4 protocol messages for FX trading")
+    st.markdown("Parse FIX protocol messages for FX trading")
 
     # Get available venues
     venue_registry = VenueRegistry.default()

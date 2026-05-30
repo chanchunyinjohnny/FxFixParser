@@ -103,7 +103,7 @@ Copy a FIX message from a log file, email, or trading system and paste it into t
 
 Click **"Parse Message"**. The tool will:
 1. Split the message into individual fields
-2. Look up every tag in the FIX 4.4 dictionary (plus venue-specific custom tags)
+2. Look up every tag in the dictionary — FIX 4.4 + FIXT 1.1 session tags + FX extensions by default, with venue-specific custom tags merged in when a venue is detected or selected
 3. Decode any enumerated values into plain English
 4. Detect the trading venue and FX product type
 5. Extract a trade summary
@@ -153,6 +153,18 @@ The sidebar includes built-in sample messages you can load with one click:
 | **Bloomberg DOR** | Bloomberg Derivatives Order Routing with 47 custom tags for algo execution, tenor support, and multi-leg instruments |
 
 Venue is auto-detected from the SenderCompID (tag 49) in the message. You can also select a venue manually from the sidebar.
+
+## Supported FIX Versions
+
+The parser is version-agnostic at the byte level — it parses any FIX `tag=value<SOH>` stream regardless of BeginString (FIX 4.2, 4.4, 5.0 SP2, FIXT 1.1 all work structurally). What differs across versions is the tag dictionary used for human-readable translation:
+
+| Dictionary | Coverage | Default? |
+|------------|----------|----------|
+| **FIX 4.4** | Standard FIX 4.4 fields (loaded from bundled `spec/FIX44.xml`) | Yes |
+| **FIXT 1.1 session tags** | 1128 ApplVerID, 1129 CstmApplVerID, 1156 ApplExtID | Yes (merged into default) |
+| **FX extensions** | Curated FX-specific tags and enum descriptions | Yes (merged into default) |
+| **Venue custom tags** | Smart Trade, FXGO, 360T, Bloomberg DOR, SGX Titan OTC | Merged when venue is detected/selected |
+| **FIX 5.0 SP2** | Standard FIX 5.0 SP2 fields (bundled `spec/FIX50SP2.xml`) | Opt-in via `load_fix_spec_fields()` |
 
 ## Supported FX Products
 
