@@ -356,6 +356,21 @@ class ParsedTrade:
     far_leg_bid_rate: float | None = None
     far_leg_offer_rate: float | None = None
 
+    # Swap-specific fields for executed/ordered swaps (single side, not quote)
+    base_currency: str | None = None
+    term_currency: str | None = None
+    trade_currency: str | None = None
+    near_leg_price: float | None = None
+    far_leg_price: float | None = None
+    near_quantity: float | None = None
+    far_quantity: float | None = None
+    spot_rate: float | None = None
+    swap_points: float | None = None
+    swap_points_pips: float | None = None
+    pip_size: float | None = None
+    near_leg_action: str | None = None  # e.g. "Sell USD"
+    far_leg_action: str | None = None  # e.g. "Buy USD"
+
     # Message type indicator
     is_quote: bool = False
     is_swap: bool = False
@@ -398,6 +413,19 @@ class ParsedTrade:
                     "far_offer_fwd_points": self.far_offer_fwd_points,
                     "bid_swap_points": self.bid_swap_points,
                     "offer_swap_points": self.offer_swap_points,
+                    "base_currency": self.base_currency,
+                    "term_currency": self.term_currency,
+                    "trade_currency": self.trade_currency,
+                    "near_leg_price": self.near_leg_price,
+                    "far_leg_price": self.far_leg_price,
+                    "near_quantity": self.near_quantity,
+                    "far_quantity": self.far_quantity,
+                    "spot_rate": self.spot_rate,
+                    "swap_points": self.swap_points,
+                    "swap_points_pips": self.swap_points_pips,
+                    "pip_size": self.pip_size,
+                    "near_leg_action": self.near_leg_action,
+                    "far_leg_action": self.far_leg_action,
                 }
             )
         return result

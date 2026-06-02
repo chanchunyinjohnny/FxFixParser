@@ -3,7 +3,18 @@
 from abc import ABC, abstractmethod
 
 from fxfixparser.core.field import FixFieldDefinition
+from fxfixparser.core.fx_math import parse_symbol, pip_size, swap_side_actions
 from fxfixparser.core.message import FixMessage, ParsedTrade
+
+
+def _to_float(value: str | None) -> float | None:
+    """Parse a tag value as float, returning None on missing / invalid."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 class VenueHandler(ABC):
@@ -88,6 +99,85 @@ class VenueHandler(ABC):
                 trade.price = float(price_str)
             except ValueError:
                 pass
+
+        # Swap-shaped execution/order: presence of SettlDate2 (193) or
+        # OrderQty2 (192) marks two-leg structure.
+        if message.get_value(193) or message.get_value(192):
+            self._extract_swap_execution_info(message, trade, side_field)
+
+    def _extract_swap_execution_info(
+        self,
+        message: FixMessage,
+        trade: ParsedTrade,
+        side_field: object,
+    ) -> None:
+        """Populate swap-specific fields for an order/execution.
+
+        Near leg comes from the standard tags (44 Price / 31 LastPx,
+        32 LastQty / 38 OrderQty, 64 SettlDate). Far leg comes from
+        640 Price2 / OrderQty2 (192) / SettlDate2 (193), with venue
+        fallbacks for Smart Trade (LastPx2 9091, LastQty2 9092).
+        """
+        trade.is_swap = True
+
+        # Currencies
+        base, term = parse_symbol(trade.symbol)
+        trade.base_currency = base
+        trade.term_currency = term
+        trade_ccy = message.get_value(15)
+        if trade_ccy:
+            trade.trade_currency = trade_ccy
+
+        # Settlement dates
+        trade.far_settlement_date = message.get_value(193)
+
+        # Near leg
+        near_price_str = message.get_value(31) or message.get_value(44)
+        near_qty_str = message.get_value(32) or message.get_value(38)
+        trade.near_leg_price = _to_float(near_price_str)
+        trade.near_quantity = _to_float(near_qty_str)
+
+        # Far leg — FIX 4.4 Price2/OrderQty2, plus Smart Trade fallbacks
+        far_price_str = message.get_value(640) or message.get_value(9091)
+        far_qty_str = message.get_value(192) or message.get_value(9092)
+        trade.far_leg_price = _to_float(far_price_str)
+        trade.far_quantity = _to_float(far_qty_str)
+
+        # Spot rate: tag 194 LastSpotRate is the fill spot rate for the
+        # swap (a swap has a single common spot anchoring both legs).
+        # Falls back to the near leg price, which equals the spot rate
+        # when near = spot date.
+        spot_str = message.get_value(194)
+        trade.spot_rate = _to_float(spot_str) if spot_str else trade.near_leg_price
+
+        # Swap points per LFX spec (page 45 ExecutionReport): tag 195
+        # LastForwardPoints is the *near* leg forward points and tag 641
+        # LastForwardPoints2 is the *far* leg forward points. Therefore
+        # 195 alone is NOT swap points. The cleanest derivation is the
+        # all-in price difference (far - near, which equals far_fwd -
+        # near_fwd algebraically). Fall back to (641 - 195) when both
+        # individual forward points are given but no Price2 is.
+        if trade.far_leg_price is not None and trade.near_leg_price is not None:
+            trade.swap_points = trade.far_leg_price - trade.near_leg_price
+        else:
+            near_fwd = _to_float(message.get_value(195))
+            far_fwd = _to_float(message.get_value(641))
+            if near_fwd is not None and far_fwd is not None:
+                trade.swap_points = far_fwd - near_fwd
+
+        # Pip conversion
+        ps = pip_size(trade.symbol)
+        trade.pip_size = ps
+        if trade.swap_points is not None and ps:
+            trade.swap_points_pips = trade.swap_points / ps
+
+        # Side semantics
+        side_code = side_field.raw_value if side_field is not None else None
+        near_action, far_action = swap_side_actions(
+            side_code, trade.trade_currency, base, term
+        )
+        trade.near_leg_action = near_action
+        trade.far_leg_action = far_action
 
     def _extract_quote_info(self, message: FixMessage, trade: ParsedTrade) -> None:
         """Extract info from Quote messages (35=S)."""

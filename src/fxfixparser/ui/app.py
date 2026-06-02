@@ -110,6 +110,90 @@ SAMPLE_MESSAGES = {
 }
 
 
+def _render_swap_trade_summary(trade: Any, message: Any) -> None:
+    """Render the swap-specific Trade Summary block.
+
+    Shows side interpretation, spot rate, swap points (with pips), and a
+    side-by-side near/far leg breakdown.
+    """
+    st.subheader("Trade Summary — FX Swap")
+
+    # Headline metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Symbol", trade.symbol or "N/A")
+    with col2:
+        st.metric("Trade Currency", trade.trade_currency or "N/A")
+    with col3:
+        st.metric("Side", trade.side or "N/A")
+    with col4:
+        st.metric("Venue", trade.venue or "N/A")
+
+    # Side interpretation — explains what Buy/Sell means in terms of legs
+    if trade.near_leg_action and trade.far_leg_action:
+        st.markdown(
+            f"**Interpretation:** Near leg → *{trade.near_leg_action}*"
+            f" &nbsp;·&nbsp; Far leg → *{trade.far_leg_action}*"
+        )
+    st.caption(
+        "Convention: Side describes the action on the far leg in the trade currency;"
+        " the near leg is the opposite."
+    )
+
+    # Pricing — spot rate, swap points (with pips), price precision
+    px_fmt = "{:.5f}"
+    pts_fmt = "{:+.6f}"
+    pips_fmt = "{:+.2f}"
+
+    pricing_cols = st.columns(3)
+    with pricing_cols[0]:
+        st.metric(
+            "Spot Rate",
+            px_fmt.format(trade.spot_rate) if trade.spot_rate is not None else "N/A",
+        )
+    with pricing_cols[1]:
+        pts_value = (
+            pts_fmt.format(trade.swap_points) if trade.swap_points is not None else "N/A"
+        )
+        pts_delta = (
+            f"{pips_fmt.format(trade.swap_points_pips)} pips"
+            if trade.swap_points_pips is not None
+            else None
+        )
+        # ``delta_color="off"`` keeps the pips line neutral grey rather
+        # than colouring positive points green / negative red — swap
+        # points have no intrinsic good/bad direction.
+        st.metric("Swap Points", pts_value, delta=pts_delta, delta_color="off")
+    with pricing_cols[2]:
+        st.metric("Product", message.product_type or "N/A")
+
+    # Near vs Far leg breakdown
+    st.markdown("#### Legs")
+
+    def _fmt_qty(q: float | None) -> str:
+        return f"{q:,.2f}" if q is not None else "N/A"
+
+    def _fmt_px(p: float | None) -> str:
+        return px_fmt.format(p) if p is not None else "N/A"
+
+    legs_data = {
+        "": ["Settlement Date", "Quantity", "Price (All-in)", "Action"],
+        "Near Leg": [
+            trade.settlement_date or "N/A",
+            _fmt_qty(trade.near_quantity),
+            _fmt_px(trade.near_leg_price),
+            trade.near_leg_action or "N/A",
+        ],
+        "Far Leg": [
+            trade.far_settlement_date or "N/A",
+            _fmt_qty(trade.far_quantity),
+            _fmt_px(trade.far_leg_price),
+            trade.far_leg_action or "N/A",
+        ],
+    }
+    st.dataframe(legs_data, use_container_width=True, hide_index=True)
+
+
 def main() -> None:
     """Main entry point for the Streamlit application."""
     st.set_page_config(
@@ -411,6 +495,8 @@ def main() -> None:
                             ]
                         st.dataframe(quote_data, use_container_width=True, hide_index=True)
 
+                elif trade.is_swap:
+                    _render_swap_trade_summary(trade, message)
                 else:
                     # Regular trade summary (Execution Report, etc.)
                     st.subheader("Trade Summary")
