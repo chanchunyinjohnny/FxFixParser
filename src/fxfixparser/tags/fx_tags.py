@@ -97,6 +97,24 @@ FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
         "Identifier for an individual leg within the NoLegs repeating group.",
     ),
     FixFieldDefinition(
+        624,
+        "LegSide",
+        "CHAR",
+        "Side of an individual leg within the NoLegs repeating group. "
+        "Mirrors the enum values of tag 54 (Side).",
+        {
+            "1": "BUY",
+            "2": "SELL",
+            "3": "BUY_MINUS",
+            "4": "SELL_PLUS",
+            "5": "SELL_SHORT",
+            "6": "SELL_SHORT_EXEMPT",
+            "7": "UNDISCLOSED",
+            "8": "CROSS",
+            "9": "CROSS_SHORT",
+        },
+    ),
+    FixFieldDefinition(
         1362, "NoFills", "NUMINGROUP", "Number of fill entries in the Fills repeating group."
     ),
     FixFieldDefinition(

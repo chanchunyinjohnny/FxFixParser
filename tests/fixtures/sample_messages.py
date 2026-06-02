@@ -124,6 +124,23 @@ BLOOMBERG_DOR_SPOT_RFQ = (
     "10=000|"
 )
 
+# Bloomberg DOR FX Spot quote-request reject (35=AG).
+# Reject is sent back when a quote request fails dealer-side checks. Mirrors
+# the real ORP wire shape: NoPartyIDs (453) sits inside the NoRelatedSym (146)
+# entry, tag 658 carries the rejection reason, and tag 58 the free-text detail.
+BLOOMBERG_DOR_SPOT_RFQ_REJECT = (
+    "8=FIXT.1.1|9=383|35=AG|34=327|49=BLPORPBETA|"
+    "52=20260602-02:22:29.237165|56=ORP_BCQT_B|115=DOR|128=DOR|"
+    "1128=9|1129=1.8|1156=208|"
+    "58=Legal Entity LEGE bit 145 set to FALSE for Customer Number [4928]|"
+    "131=1511314052507373568|658=99|1300=BTBS|"
+    "146=1|15=EUR|38=1000000|55=EUR/USD|60=20260602-02:22:29.226|"
+    "64=20260604|167=FXSPOT|460=4|"
+    "453=3|447=D|448=DOR1|452=1|447=D|448=DOR2|452=1|"
+    "447=D|448=29618590|452=11|"
+    "10=000|"
+)
+
 # Bloomberg DOR FX Spot quote (dealer response)
 BLOOMBERG_DOR_SPOT_QUOTE = (
     "8=FIXT.1.1|9=250|35=S|49=BLOOMBERG_DOR|56=CLIENT|34=2|"

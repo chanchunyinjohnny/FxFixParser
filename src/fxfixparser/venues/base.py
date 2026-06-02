@@ -91,6 +91,16 @@ class VenueHandler(ABC):
         """Return list of venue-specific custom tag definitions."""
         return []
 
+    @property
+    def enum_extensions(self) -> dict[int, dict[str, str]]:
+        """Return venue-specific enum values to merge into existing field definitions.
+
+        Use this to add proprietary enum codes (e.g. Bloomberg's PartySubIDType
+        4025 = Legal Entity Identifier) without replacing the standard values
+        for that tag. Mapping: ``{tag: {raw_value: description}}``.
+        """
+        return {}
+
     def enhance_message(self, message: FixMessage) -> FixMessage:
         """Enhance the parsed message with venue-specific information."""
         message.venue = self.name

@@ -10,6 +10,7 @@ from tests.fixtures.sample_messages import (
     BLOOMBERG_DOR_SPOT_EXEC,
     BLOOMBERG_DOR_SPOT_QUOTE,
     BLOOMBERG_DOR_SPOT_RFQ,
+    BLOOMBERG_DOR_SPOT_RFQ_REJECT,
     BLOOMBERG_DOR_SWAP_EXEC,
 )
 
@@ -261,3 +262,85 @@ class TestBloombergDORSwapLegs:
         field = message.get_field(1788)
         assert field is not None
         assert field.name == "LegID"
+
+
+class TestBloombergDORQuoteRequestReject:
+    """Tests for Bloomberg DOR QuoteRequestReject (35=AG) — a FIX 5.0 message
+    type that only resolves once the SP2 spec is layered onto the FIX 4.4 base
+    via the message's ApplVerID (tag 1128=9)."""
+
+    @pytest.fixture
+    def parser(self):
+        return FixParser(config=ParserConfig(strict_checksum=False))
+
+    def test_message_parses_and_detects_venue(self, parser):
+        """AG message parses end-to-end and auto-detects as Bloomberg DOR."""
+        message = parser.parse(BLOOMBERG_DOR_SPOT_RFQ_REJECT, auto_detect_venue=True)
+        assert message.msg_type == "AG"
+        assert message.venue == "Bloomberg DOR"
+
+    def test_msg_type_ag_decodes_via_auto_loaded_sp2_spec(self, parser):
+        """Tag 35=AG decodes to 'QUOTE_REQUEST_REJECT' because the SP2 spec
+        is layered automatically when ApplVerID=9 is seen."""
+        message = parser.parse(BLOOMBERG_DOR_SPOT_RFQ_REJECT, auto_detect_venue=True)
+        msg_type_field = message.get_field(35)
+        assert msg_type_field is not None
+        assert msg_type_field.value_description == "QUOTE_REQUEST_REJECT"
+
+    def test_appl_ver_id_resolves(self, parser):
+        """ApplVerID=9 decodes to 'FIX 5.0 SP2' so the spec auto-load can fire."""
+        message = parser.parse(BLOOMBERG_DOR_SPOT_RFQ_REJECT, auto_detect_venue=True)
+        appl_ver = message.get_field(1128)
+        assert appl_ver is not None
+        assert appl_ver.value_description == "FIX 5.0 SP2"
+
+    def test_reject_reason_decodes(self, parser):
+        """Tag 658 (QuoteRequestRejectReason) carries 99=Other for this reject."""
+        message = parser.parse(BLOOMBERG_DOR_SPOT_RFQ_REJECT, auto_detect_venue=True)
+        reason = message.get_field(658)
+        assert reason is not None
+        assert reason.name == "QuoteRequestRejectReason"
+        assert reason.raw_value == "99"
+        assert reason.value_description == "Other"
+
+    def test_text_field_carries_reason_detail(self, parser):
+        """Tag 58 (Text) carries the free-text reject detail verbatim."""
+        message = parser.parse(BLOOMBERG_DOR_SPOT_RFQ_REJECT, auto_detect_venue=True)
+        text = message.get_field(58)
+        assert text is not None
+        assert text.name == "Text"
+        assert "Customer Number [4928]" in text.raw_value
+
+    def test_quote_req_id_links_back_to_request(self, parser):
+        """Tag 131 (QuoteReqID) echoes the originating QuoteRequest's ID."""
+        message = parser.parse(BLOOMBERG_DOR_SPOT_RFQ_REJECT, auto_detect_venue=True)
+        qid = message.get_field(131)
+        assert qid is not None
+        assert qid.raw_value == "1511314052507373568"
+
+    def test_market_segment_id_decodes(self, parser):
+        """Tag 1300=BTBS decodes via the Bloomberg DOR venue's enum override."""
+        message = parser.parse(BLOOMBERG_DOR_SPOT_RFQ_REJECT, auto_detect_venue=True)
+        seg = message.get_field(1300)
+        assert seg is not None
+        assert seg.value_description == "Bloomberg Trade Book Singapore"
+
+    def test_related_sym_group_carries_one_entry(self, parser):
+        """The NoRelatedSym (146) group is recognised with exactly one entry."""
+        message = parser.parse(BLOOMBERG_DOR_SPOT_RFQ_REJECT, auto_detect_venue=True)
+        related_sym_groups = [
+            sf.group
+            for sf in message.get_structured_fields()
+            if sf.is_group and sf.group is not None and sf.group.count_field.tag == 146
+        ]
+        assert len(related_sym_groups) == 1
+        group = related_sym_groups[0]
+        assert group.count == 1
+        assert len(group.entries) == 1
+
+    def test_all_message_tags_have_definitions(self, parser):
+        """No tag in this AG should fall through as Unknown — the SP2 auto-load
+        plus venue overlay should cover every field present."""
+        message = parser.parse(BLOOMBERG_DOR_SPOT_RFQ_REJECT, auto_detect_venue=True)
+        unknown = sorted({f.tag for f in message.fields if f.definition is None})
+        assert unknown == [], f"Unexpected unknown tags: {unknown}"

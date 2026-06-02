@@ -16,6 +16,16 @@ logger = logging.getLogger(__name__)
 _SPEC_DIR = Path(__file__).parent
 _FIX44_XML = _SPEC_DIR / "FIX44.xml"
 
+# Map FIX ApplVerID (tag 1128) values to bundled QuickFIX XML filenames.
+# Only versions with a bundled spec are listed; missing keys mean we don't
+# layer anything beyond the default FIX 4.4 dictionary.
+_APPL_VER_ID_TO_SPEC: dict[str, str] = {
+    "9": "FIX50SP2.xml",
+}
+
+# Parsed-spec cache so repeated parses don't re-read the XML.
+_APPL_VER_ID_CACHE: dict[str, list[FixFieldDefinition]] = {}
+
 
 def load_fix_spec_fields(xml_path: Path) -> list[FixFieldDefinition]:
     """Load field definitions from any QuickFIX-format XML specification.
@@ -76,6 +86,23 @@ def load_fix_spec_fields(xml_path: Path) -> list[FixFieldDefinition]:
 
     logger.info("Loaded %d field definitions from %s", len(definitions), xml_path)
     return definitions
+
+
+def load_spec_for_appl_ver_id(appl_ver_id: str) -> list[FixFieldDefinition]:
+    """Return field definitions for the bundled spec matching ``appl_ver_id``.
+
+    ``appl_ver_id`` is the raw value of FIX tag 1128 (e.g. ``"9"`` for FIX 5.0
+    SP2). Returns an empty list when the version has no bundled spec. Results
+    are cached after the first load.
+    """
+    spec_filename = _APPL_VER_ID_TO_SPEC.get(appl_ver_id)
+    if not spec_filename:
+        return []
+    if appl_ver_id in _APPL_VER_ID_CACHE:
+        return _APPL_VER_ID_CACHE[appl_ver_id]
+    fields = load_fix_spec_fields(_SPEC_DIR / spec_filename)
+    _APPL_VER_ID_CACHE[appl_ver_id] = fields
+    return fields
 
 
 def load_fix44_fields(xml_path: Path | None = None) -> list[FixFieldDefinition]:

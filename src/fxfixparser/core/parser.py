@@ -8,8 +8,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from fxfixparser.core.exceptions import ChecksumError, ParseError, ValidationError
-from fxfixparser.core.field import FixField
+from fxfixparser.core.field import FixField, FixFieldDefinition
 from fxfixparser.core.message import FixMessage
+from fxfixparser.spec.loader import load_spec_for_appl_ver_id
 from fxfixparser.tags.dictionary import TagDictionary
 
 if TYPE_CHECKING:
@@ -34,6 +35,11 @@ class FixParser:
 
     SOH = "\x01"
     PIPE = "|"
+
+    # Cache of dictionaries layered with a FIX version spec, keyed by
+    # (id(base_dictionary), appl_ver_id). Kept at class level so repeated
+    # parses across parser instances share the merge cost.
+    _spec_dict_cache: dict[tuple[int, str], TagDictionary] = {}
 
     def __init__(
         self,
@@ -70,14 +76,19 @@ class FixParser:
         # Resolve venue handler if needed
         venue_handler = self._resolve_venue(venue)
 
-        # Get dictionary with venue-specific tags merged in
-        dictionary = self._get_dictionary_for_venue(venue_handler)
-
         normalized = self._normalize_delimiter(raw_message)
         raw_fields = self._extract_fields(normalized)
 
         if not raw_fields:
             raise ParseError("No valid fields found in message")
+
+        # Layer the FIX version spec onto the base dictionary based on the
+        # message's own ApplVerID (tag 1128). This means FIX 5.0 SP2 tags
+        # like 1788, 2346, 1068 resolve without explicit configuration.
+        spec_base = self._dictionary_for_message(raw_fields)
+
+        # Layer venue tags + enum extensions on top
+        dictionary = self._get_dictionary_for_venue(venue_handler, spec_base)
 
         fields = self._build_fields(raw_fields, dictionary)
         message = FixMessage(fields=fields, raw_message=raw_message)
@@ -88,7 +99,7 @@ class FixParser:
         if venue_handler is None and auto_detect_venue:
             venue_handler = self._autodetect_venue(message)
             if venue_handler is not None:
-                dictionary = self._get_dictionary_for_venue(venue_handler)
+                dictionary = self._get_dictionary_for_venue(venue_handler, spec_base)
                 message = FixMessage(
                     fields=self._build_fields(raw_fields, dictionary),
                     raw_message=raw_message,
@@ -129,21 +140,116 @@ class FixParser:
 
         return venue
 
-    def _get_dictionary_for_venue(self, venue_handler: VenueHandler | None) -> TagDictionary:
-        """Get a tag dictionary with venue-specific tags merged in."""
-        if venue_handler is None or not venue_handler.custom_tags:
+    def _dictionary_for_message(self, raw_fields: list[tuple[int, str]]) -> TagDictionary:
+        """Return a base dictionary with the message's FIX version spec layered on.
+
+        Looks up tag 1128 (ApplVerID) in the raw fields and merges any bundled
+        spec for that version into the parser's base dictionary. Fields already
+        present in the base (e.g. FX-curated descriptions) are left untouched;
+        the spec only fills in tags the base doesn't already define. Results
+        are cached per (base dictionary, ApplVerID) so repeated parses pay the
+        merge cost once.
+        """
+        appl_ver_id: str | None = None
+        for tag, value in raw_fields:
+            if tag == 1128:
+                appl_ver_id = value
+                break
+        if not appl_ver_id:
             return self.dictionary
 
-        # Create a copy of the base dictionary and merge venue tags
-        venue_dict = TagDictionary()
-        # First add all base tags
+        cache_key = (id(self.dictionary), appl_ver_id)
+        cached = self._spec_dict_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        spec_fields = load_spec_for_appl_ver_id(appl_ver_id)
+        if not spec_fields:
+            return self.dictionary
+
+        merged = TagDictionary()
         for tag in self.dictionary.all_tags():
             defn = self.dictionary.get(tag)
             if defn:
+                merged.add(defn)
+        # For tags the base doesn't define, add the spec entry as-is.
+        # For tags both define, keep the base's name/type/description
+        # (curated for FX) but layer in any enum values the spec contributes
+        # that the base lacks — so e.g. FIX 5.0 message types like "AI"
+        # become decodable without losing the curated FIX 4.4 descriptions.
+        for defn in spec_fields:
+            existing = merged.get(defn.tag)
+            if existing is None:
+                merged.add(defn)
+            elif defn.valid_values:
+                # Spec values fill gaps; existing values win on conflicts.
+                combined = {**defn.valid_values, **existing.valid_values}
+                if combined != existing.valid_values:
+                    merged.add(
+                        FixFieldDefinition(
+                            tag=existing.tag,
+                            name=existing.name,
+                            field_type=existing.field_type,
+                            description=existing.description,
+                            valid_values=combined,
+                        )
+                    )
+
+        self._spec_dict_cache[cache_key] = merged
+        logger.debug(
+            "Layered FIX spec for ApplVerID=%s onto base dictionary "
+            "(%d fields added).",
+            appl_ver_id,
+            len(merged.all_tags()) - len(self.dictionary.all_tags()),
+        )
+        return merged
+
+    def _get_dictionary_for_venue(
+        self,
+        venue_handler: VenueHandler | None,
+        base_dictionary: TagDictionary | None = None,
+    ) -> TagDictionary:
+        """Get a tag dictionary with venue-specific tags and enum extensions merged in."""
+        base = base_dictionary if base_dictionary is not None else self.dictionary
+
+        if venue_handler is None or (
+            not venue_handler.custom_tags and not venue_handler.enum_extensions
+        ):
+            return base
+
+        # Create a copy of the base dictionary and merge venue tags
+        venue_dict = TagDictionary()
+        for tag in base.all_tags():
+            defn = base.get(tag)
+            if defn:
                 venue_dict.add(defn)
-        # Then add/override with venue-specific tags
+        # Then add/override with venue-specific tag definitions
         for defn in venue_handler.custom_tags:
             venue_dict.add(defn)
+        # Finally, extend (not replace) enum values for standard tags
+        for tag, extra_values in venue_handler.enum_extensions.items():
+            existing = venue_dict.get(tag)
+            if existing is not None:
+                merged_values = {**existing.valid_values, **extra_values}
+                venue_dict.add(
+                    FixFieldDefinition(
+                        tag=existing.tag,
+                        name=existing.name,
+                        field_type=existing.field_type,
+                        description=existing.description,
+                        valid_values=merged_values,
+                    )
+                )
+            else:
+                # No existing definition to extend — create a minimal one
+                # so the venue's enum codes still decode.
+                venue_dict.add(
+                    FixFieldDefinition(
+                        tag=tag,
+                        name=f"Tag{tag}",
+                        valid_values=dict(extra_values),
+                    )
+                )
 
         return venue_dict
 

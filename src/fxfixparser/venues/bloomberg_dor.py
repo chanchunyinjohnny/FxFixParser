@@ -194,3 +194,14 @@ class BloombergDORHandler(VenueHandler):
     def custom_tags(self) -> list[FixFieldDefinition]:
         """Return Bloomberg DOR custom tag definitions."""
         return list(_BLOOMBERG_CUSTOM_TAGS.values())
+
+    @property
+    def enum_extensions(self) -> dict[int, dict[str, str]]:
+        """Bloomberg-specific enum codes that extend standard FIX fields."""
+        return {
+            # PartySubIDType: Bloomberg ORP/DOR uses code 4025 to indicate the
+            # PartySubID carries an ISO 17442 Legal Entity Identifier (LEI).
+            803: {
+                "4025": "Legal Entity Identifier",
+            },
+        }
