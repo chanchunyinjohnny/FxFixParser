@@ -370,6 +370,10 @@ class ParsedTrade:
     pip_size: float | None = None
     near_leg_action: str | None = None  # e.g. "Sell USD"
     far_leg_action: str | None = None  # e.g. "Buy USD"
+    # "parent" when leg actions are derived from the order-level Side
+    # tag (54) and the trade currency convention; "legs" when each leg
+    # carries an explicit LegSide (624) — Bloomberg DOR's shape.
+    swap_side_source: str | None = None
 
     # Message type indicator
     is_quote: bool = False
@@ -426,6 +430,7 @@ class ParsedTrade:
                     "pip_size": self.pip_size,
                     "near_leg_action": self.near_leg_action,
                     "far_leg_action": self.far_leg_action,
+                    "swap_side_source": self.swap_side_source,
                 }
             )
         return result

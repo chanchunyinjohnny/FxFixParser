@@ -12,6 +12,7 @@ import pytest
 
 from fxfixparser.core.fx_math import parse_symbol, pip_size, swap_side_actions
 from fxfixparser.core.parser import FixParser, ParserConfig
+from fxfixparser.venues.bloomberg_dor import BloombergDORHandler
 from fxfixparser.venues.smart_trade import SmartTradeHandler
 
 
@@ -209,6 +210,60 @@ class TestSwapExecutionExtraction:
         # 641 - 195 = 0.50 → 50 pips at 0.01 pip size
         assert trade.swap_points == pytest.approx(0.50, abs=1e-9)
         assert trade.swap_points_pips == pytest.approx(50.0, abs=1e-6)
+
+    def test_bloomberg_dor_swap_via_nolegs_group(self):
+        """Bloomberg DOR uses NoLegs (555) with per-leg LegSide (624)."""
+        msg = (
+            "8=FIXT.1.1|9=500|35=8|49=BLOOMBERG_DOR|56=CLIENT|34=3|"
+            "52=20240115-10:32:00|115=DOR|"
+            "37=ORD102|11=CL102|17=EXEC102|150=F|39=2|"
+            "55=EUR/USD|167=FXSWAP|460=4|40=G|54=1|15=EUR|"
+            "32=10000000|31=1.08500|194=1.08500|1071=0.00500|"
+            "75=20240115|120=USD|555=2|"
+            "600=EUR/USD|609=FXSPOT|624=1|556=EUR|"
+            "587=0|588=20240117|637=1.08500|687=10000000|1788=1|"
+            "600=EUR/USD|609=FXFWD|624=2|556=EUR|"
+            "587=M3|588=20240415|637=1.09000|687=10000000|1788=2|"
+            "60=20240115-10:32:00|10=000|"
+        )
+        message = _parse(msg)
+        trade = BloombergDORHandler().extract_trade(message)
+
+        assert trade.is_swap is True
+        assert trade.symbol == "EUR/USD"
+        # Legs sorted by 588 LegSettlDate
+        assert trade.settlement_date == "20240117"
+        assert trade.far_settlement_date == "20240415"
+        assert trade.near_leg_price == pytest.approx(1.08500)
+        assert trade.far_leg_price == pytest.approx(1.09000)
+        assert trade.near_quantity == 10_000_000.0
+        assert trade.far_quantity == 10_000_000.0
+        # Per-leg sides override the parent Side derivation:
+        # Leg 1 LegSide=Buy on EUR, Leg 2 LegSide=Sell on EUR.
+        assert trade.near_leg_action == "Buy EUR"
+        assert trade.far_leg_action == "Sell EUR"
+        # Spot rate from tag 194, swap points from leg-price difference
+        assert trade.spot_rate == pytest.approx(1.08500)
+        assert trade.swap_points == pytest.approx(0.00500, abs=1e-9)
+        assert trade.swap_points_pips == pytest.approx(50.0, abs=1e-6)
+
+    def test_swap_points_from_tag_1071_when_no_far_price(self):
+        """Bloomberg-style explicit 1071 LastSwapPoints fallback."""
+        # NoLegs absent and Price2 absent — only 194 + 1071 present.
+        msg = (
+            "8=FIXT.1.1|9=200|35=8|49=BLOOMBERG_DOR|56=CLIENT|34=1|"
+            "52=20240115-10:32:00|115=DOR|37=O1|17=E1|150=F|39=2|"
+            "55=EUR/USD|167=FXSWAP|54=1|15=EUR|32=10000000|31=1.08500|"
+            "194=1.08500|1071=0.00500|193=20240415|192=10000000|"
+            "60=20240115-10:32:00|10=000|"
+        )
+        message = _parse(msg)
+        trade = BloombergDORHandler().extract_trade(message)
+        assert trade.is_swap is True
+        assert trade.spot_rate == pytest.approx(1.08500)
+        # No far price, so falls through to 1071
+        assert trade.swap_points == pytest.approx(0.00500)
+        assert trade.swap_points_pips == pytest.approx(50.0)
 
     def test_to_dict_includes_swap_fields(self):
         message = _parse(LFX_SWAP_ORDER_USD_BASE)

@@ -135,10 +135,15 @@ def _render_swap_trade_summary(trade: Any, message: Any) -> None:
             f"**Interpretation:** Near leg → *{trade.near_leg_action}*"
             f" &nbsp;·&nbsp; Far leg → *{trade.far_leg_action}*"
         )
-    st.caption(
-        "Convention: Side describes the action on the far leg in the trade currency;"
-        " the near leg is the opposite."
-    )
+        if trade.swap_side_source == "legs":
+            st.caption(
+                "Source: explicit per-leg LegSide (tag 624) in the NoLegs (555) group."
+            )
+        elif trade.swap_side_source == "parent":
+            st.caption(
+                "Convention: order Side (54) describes the action on the far leg"
+                " in the trade currency; the near leg is the opposite."
+            )
 
     # Pricing — spot rate, swap points (with pips), price precision
     px_fmt = "{:.5f}"
