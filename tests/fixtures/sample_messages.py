@@ -124,6 +124,78 @@ BLOOMBERG_DOR_SPOT_RFQ = (
     "10=000|"
 )
 
+# Bloomberg DOR FX Swap QuoteStatusReport (35=AI).
+# Exercises a nested NoPartySubIDs (802) group inside the first party
+# (carrying a Legal Entity Identifier) and a 555 NoLegs group whose legs
+# include FIX 5.0+ tags (587 LegSettlType, 1788 LegID). Used to verify
+# that party + leg counts are detected correctly.
+BLOOMBERG_DOR_SWAP_QUOTE_STATUS = (
+    "8=FIXT.1.1|9=537|35=AI|34=740|49=BLPORPBETA|"
+    "52=20260529-06:04:13.216393|56=ORP_BCQT_B|115=DOR|128=DOR|"
+    "1128=9|1129=1.8|1156=208|"
+    "15=EUR|54=1|55=EUR/USD|60=20260529-06:04:13.192|"
+    "120=EUR|131=1509920301155225600|167=FXSWAP|297=0|460=4|1300=BTBS|"
+    "453=4|"
+    "447=D|448=67e626b081740000|452=13|"
+    "802=1|523=KNPC1X7GHDZW8U2ZSF89|803=4025|"
+    "447=D|448=29618590|452=11|"
+    "447=D|448=DOR1|452=1|"
+    "447=D|448=DOR2|452=1|"
+    "555=2|"
+    "556=EUR|587=B|588=20260605|600=EUR/USD|607=4|609=FXFWD|"
+    "624=2|685=1000000|1788=1|"
+    "556=EUR|587=B|588=20260625|600=EUR/USD|607=4|609=FXFWD|"
+    "624=1|685=1000000|1788=2|"
+    "10=000|"
+)
+
+# Bloomberg DOR FX Swap QuoteStatusReport (35=AI) with QuoteStatus=Pass (297=11).
+# A real maker-declined response: the near leg uses 587=1 (Cash) and the far
+# leg 587=B (BrokenDate), and BOTH the first and third parties carry a nested
+# NoPartySubIDs (802) Legal Entity Identifier. Used to verify the human-readable
+# enum decoding of 297 QuoteStatus, 587 LegSettlType, and 607 LegProduct.
+BLOOMBERG_DOR_SWAP_QUOTE_STATUS_PASS = (
+    "8=FIXT.1.1|9=595|35=AI|34=6943|49=BLPORPBETA|"
+    "52=20260602-14:52:53.901353|56=ORP_BCQT_B|115=DOR|128=DOR|"
+    "1128=9|1129=1.8|1156=208|"
+    "15=EUR|54=2|55=EUR/USD|58=Maker declined|60=20260602-14:52:53.883|"
+    "131=1511502890232057856|167=FXSWAP|297=11|460=4|"
+    "693=UDH1511502899568578560|1300=BTBS|"
+    "453=3|"
+    "447=D|448=67e626b081740000|452=13|"
+    "802=1|523=KNPC1X7GHDZW8U2ZSF89|803=4025|"
+    "447=D|448=29618590|452=11|"
+    "447=D|448=DOR2|452=1|"
+    "802=1|523=213800236FPKUA98LP10|803=4025|"
+    "555=2|"
+    "556=EUR|587=1|588=20260602|600=EUR/USD|607=4|609=FXFWD|"
+    "624=1|685=1000000|1788=1|"
+    "556=EUR|587=B|588=20260702|600=EUR/USD|607=4|609=FXFWD|"
+    "624=2|685=1000000|1788=2|"
+    "10=034|"
+)
+
+# Bloomberg DOR FX Swap Quote (35=S) — dealer response carrying per-leg
+# all-in prices (684), forward points (1068), and mid prices (2346).
+# Exercises the FIX 5.0+ leg-level price tags in the NoLegs group.
+BLOOMBERG_DOR_SWAP_QUOTE_RESPONSE = (
+    "8=FIXT.1.1|9=469|35=S|34=741|49=BLPORPBETA|"
+    "52=20260529-06:04:13.946228|56=ORP_BCQT_B|115=DOR|128=DOR|"
+    "1128=9|1129=1.8|1156=208|"
+    "15=EUR|40=1|55=EUR/USD|60=20260529-06:04:13.931|"
+    "117=863044229-DOR1-0|131=1509920301155225600|167=FXSWAP|"
+    "190=1.16439|460=4|537=1|1300=BTBS|"
+    "453=2|"
+    "447=D|448=29618590|452=11|"
+    "447=D|448=DOR1|452=1|"
+    "555=2|"
+    "556=EUR|600=EUR/USD|607=4|624=1|684=1.164551|685=1000000|"
+    "1068=1.61|1788=1|2346=0|"
+    "556=EUR|600=EUR/USD|607=4|624=1|684=1.165588|685=1000000|"
+    "1068=11.98|1788=2|2346=0|"
+    "10=000|"
+)
+
 # Bloomberg DOR FX Spot quote-request reject (35=AG).
 # Reject is sent back when a quote request fails dealer-side checks. Mirrors
 # the real ORP wire shape: NoPartyIDs (453) sits inside the NoRelatedSym (146)

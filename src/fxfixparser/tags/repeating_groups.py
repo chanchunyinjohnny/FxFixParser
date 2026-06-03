@@ -78,7 +78,12 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             448,  # PartyID
             447,  # PartyIDSource
             452,  # PartyRole
-            802,  # NoPartySubIDs (nested group)
+            802,  # NoPartySubIDs (nested group count)
+            # Nested PartySubIDs (802) child tags. Treated as flat members
+            # of the parent so the walker doesn't terminate the party entry
+            # on them — loses nested structure but keeps the count correct.
+            523,  # PartySubID
+            803,  # PartySubIDType
         },
     ),
     # Sides (Trade Capture Report side-level details)
@@ -155,7 +160,7 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             621,  # EncodedLegSecurityDescLen
             622,  # LegPool
             623,  # LegDatedDate
-            624,  # LegContractSettlMonth
+            624,  # LegSide (FIX 5.0+ reuses this tag — was LegContractSettlMonth in 4.2)
             556,  # LegCurrency
             564,  # LegPositionEffect
             565,  # LegCoveredOrUncovered
@@ -171,6 +176,12 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             686,  # LegPriceType
             687,  # LegQty
             1788,  # LegID (FIX 5.0+; used by Bloomberg DOR swap legs)
+            # FIX 5.0+ leg-level price/forward-point fields seen in
+            # Bloomberg DOR swap RFQs, quotes, and status reports.
+            607,  # LegProduct
+            1067,  # LegBidForwardPoints
+            1068,  # LegOfferForwardPoints
+            2346,  # LegMidPx
         },
     ),
     # Allocations

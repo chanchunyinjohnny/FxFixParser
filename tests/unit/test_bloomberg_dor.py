@@ -12,6 +12,9 @@ from tests.fixtures.sample_messages import (
     BLOOMBERG_DOR_SPOT_RFQ,
     BLOOMBERG_DOR_SPOT_RFQ_REJECT,
     BLOOMBERG_DOR_SWAP_EXEC,
+    BLOOMBERG_DOR_SWAP_QUOTE_RESPONSE,
+    BLOOMBERG_DOR_SWAP_QUOTE_STATUS,
+    BLOOMBERG_DOR_SWAP_QUOTE_STATUS_PASS,
 )
 
 
@@ -344,3 +347,125 @@ class TestBloombergDORQuoteRequestReject:
         message = parser.parse(BLOOMBERG_DOR_SPOT_RFQ_REJECT, auto_detect_venue=True)
         unknown = sorted({f.tag for f in message.fields if f.definition is None})
         assert unknown == [], f"Unexpected unknown tags: {unknown}"
+
+
+class TestBloombergDORRepeatingGroupCounts:
+    """Tests that the repeating-group walker recognises all entries for
+    Bloomberg DOR swap messages whose legs/parties carry FIX 5.0+ tags
+    (607 LegProduct, 1068 LegOfferForwardPoints, 2346 LegMidPx, and the
+    nested 802 NoPartySubIDs 523/803 leaves). Regression coverage for the
+    bug where unregistered member tags terminated the group early."""
+
+    @pytest.fixture
+    def parser(self):
+        return FixParser(config=ParserConfig(strict_checksum=False))
+
+    def _group(self, message, count_tag: int):
+        for sf in message.get_structured_fields():
+            if sf.is_group and sf.group is not None and sf.group.count_field.tag == count_tag:
+                return sf.group
+        return None
+
+    def test_swap_quote_status_yields_four_parties_and_two_legs(self, parser):
+        """The AI message has 453=4 (one with a nested 802 NoPartySubIDs) and
+        555=2 (each leg carrying 607 LegProduct). Both counts must match."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_QUOTE_STATUS, venue="Bloomberg DOR")
+
+        parties = self._group(message, 453)
+        assert parties is not None, "Party IDs group not detected"
+        assert parties.count == 4
+        assert len(parties.entries) == 4, (
+            f"Party count mismatch: declared {parties.count}, "
+            f"got {len(parties.entries)} entries — nested 802/523/803 likely "
+            f"terminating the walker."
+        )
+
+        legs = self._group(message, 555)
+        assert legs is not None, "Legs group not detected"
+        assert legs.count == 2
+        assert len(legs.entries) == 2, (
+            f"Leg count mismatch: declared {legs.count}, "
+            f"got {len(legs.entries)} entries — 607 LegProduct likely "
+            f"terminating the walker."
+        )
+
+    def test_swap_quote_yields_two_legs_with_fwd_points_and_mid(self, parser):
+        """The Quote (S) carries 1068 LegOfferForwardPoints and 2346 LegMidPx
+        per leg; both must register as leg members so the count stays 2."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_QUOTE_RESPONSE, venue="Bloomberg DOR")
+        legs = self._group(message, 555)
+        assert legs is not None, "Legs group not detected"
+        assert legs.count == 2
+        assert len(legs.entries) == 2
+
+        leg1, leg2 = legs.entries
+        tags1 = {f.tag for f in leg1.fields}
+        tags2 = {f.tag for f in leg2.fields}
+        # Each leg should carry its 1068 forward points and 2346 mid price
+        assert 1068 in tags1 and 1068 in tags2
+        assert 2346 in tags1 and 2346 in tags2
+
+    def test_party_sub_id_decodes_inside_nested_group(self, parser):
+        """803=4025 in the nested NoPartySubIDs should still decode to the
+        Bloomberg enum extension ('Legal Entity Identifier') after the
+        repeating-group fix."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_QUOTE_STATUS, venue="Bloomberg DOR")
+        sub_type = next((f for f in message.fields if f.tag == 803), None)
+        assert sub_type is not None
+        assert sub_type.value_description == "Legal Entity Identifier"
+
+
+class TestBloombergDORQuoteStatusPass:
+    """Regression coverage for the QuoteStatusReport (35=AI) PASS message.
+
+    Verifies enum decoding of 297 QuoteStatus (renamed from the incorrect
+    QuoteAckStatus), 587 LegSettlType, and 607 LegProduct, plus that the two
+    parties carrying a nested NoPartySubIDs (802) don't break the party count.
+    """
+
+    @pytest.fixture
+    def parser(self):
+        return FixParser(config=ParserConfig(strict_checksum=False))
+
+    def _group(self, message, count_tag: int):
+        for sf in message.get_structured_fields():
+            if sf.is_group and sf.group is not None and sf.group.count_field.tag == count_tag:
+                return sf.group
+        return None
+
+    def test_quote_status_field_named_and_decoded(self, parser):
+        """Tag 297 must be named QuoteStatus (not QuoteAckStatus) and 11 decodes
+        to 'Pass' — the spec and standard FIX both call this QuoteStatus."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_QUOTE_STATUS_PASS, venue="Bloomberg DOR")
+        status = next((f for f in message.fields if f.tag == 297), None)
+        assert status is not None
+        assert status.name == "QuoteStatus"
+        assert status.raw_value == "11"
+        assert status.value_description == "Pass"
+
+    def test_three_parties_with_two_nested_sub_ids(self, parser):
+        """453=3 with the first and third parties each carrying a nested
+        NoPartySubIDs (802); all three entries must be detected."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_QUOTE_STATUS_PASS, venue="Bloomberg DOR")
+        parties = self._group(message, 453)
+        assert parties is not None, "Party IDs group not detected"
+        assert parties.count == 3
+        assert len(parties.entries) == 3
+
+    def test_leg_settl_type_and_product_decode(self, parser):
+        """Per-leg 587 LegSettlType (1=Cash, B=BrokenDate) and 607 LegProduct
+        (4=CURRENCY) must decode to their enum descriptions."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_QUOTE_STATUS_PASS, venue="Bloomberg DOR")
+        legs = self._group(message, 555)
+        assert legs is not None, "Legs group not detected"
+        assert len(legs.entries) == 2
+
+        leg1, leg2 = legs.entries
+        settl1 = next(f for f in leg1.fields if f.tag == 587)
+        settl2 = next(f for f in leg2.fields if f.tag == 587)
+        assert settl1.value_description == "Cash"
+        assert settl2.value_description == "BrokenDate"
+
+        for leg in (leg1, leg2):
+            product = next(f for f in leg.fields if f.tag == 607)
+            assert product.value_description == "CURRENCY"

@@ -889,13 +889,12 @@ FIX44_TAGS: list[FixFieldDefinition] = [
             "2": "AckEach",
         },
     ),
-    # Quote Acknowledgement fields
+    # Quote status fields
     FixFieldDefinition(
         297,
-        "QuoteAckStatus",
+        "QuoteStatus",
         "INT",
-        "Quote acknowledgement status. Indicates whether the quote was accepted, rejected, "
-        "or other status.",
+        "Quote status. Indicates whether the quote was accepted, rejected, or other status.",
         {
             "0": "Accepted",
             "1": "CancelForSymbol",
