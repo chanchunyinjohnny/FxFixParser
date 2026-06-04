@@ -15,7 +15,6 @@ from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.venues.bloomberg_dor import BloombergDORHandler
 from fxfixparser.venues.smart_trade import SmartTradeHandler
 
-
 # User-supplied LFX NewOrderSingle swap for USD/CNH. Side=Buy, trade ccy
 # = USD (base). Near 6.757113, Far 6.757698 → +0.000585 = +5.85 pips.
 LFX_SWAP_ORDER_USD_BASE = (

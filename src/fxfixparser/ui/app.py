@@ -107,6 +107,39 @@ SAMPLE_MESSAGES = {
         "587=M3|588=20240415|637=1.09000|1788=2|"
         "60=20240115-10:32:00|10=000|"
     ),
+    "360T: Spot Quote Request": (
+        "8=FIX.4.4|9=0|35=R|49=CLIENT|56=360T|34=1|52=20240115-10:30:00|"
+        "131=QR-SPOT-1|7070=20240117|7071=FX-STD|7611=3|146=1|55=EUR/USD|537=1|"
+        "54=1|38=1000000|64=20240117|15=EUR|1=ACME|126=20240115-12:13:55|10=000|"
+    ),
+    "360T: Swap Quote (Two-Way)": (
+        "8=FIX.4.4|9=0|35=S|49=360T|56=CLIENT|34=3|52=20240115-10:30:05|"
+        "1=ACME|15=EUR|38=1000000|55=EUR/USD|106=BANKA|117=Q-1|131=QR-SWAP-1|"
+        "132=1.08490|133=1.08510|188=1.08480|190=1.08520|192=1000000|"
+        "6050=1.08560|6051=1.08590|7070=20240117|7071=FX-STD|10=000|"
+    ),
+    "360T: Forward Execution": (
+        "8=FIX.4.4|9=0|35=8|49=360T|56=CLIENT|34=5|52=20240115-10:31:00|"
+        "1=ACME|6=0|11=CL-FWD-1|14=5000000|15=EUR|17=EX-FWD-1|31=1.09000|32=5000000|"
+        "37=ORD-FWD-1|38=5000000|39=2|40=D|44=1.09000|54=1|55=EUR/USD|"
+        "60=20240115-10:31:00|64=20240415|106=BANKA|117=Q-9|150=F|151=0|"
+        "194=1.08500|7070=20240115|7071=FX-STD|10=000|"
+    ),
+    "360T: Swap Execution": (
+        "8=FIX.4.4|9=0|35=8|49=360T|56=CLIENT|34=6|52=20240115-10:32:00|"
+        "1=ACME|6=0|11=CL-SWAP-1|14=10000000|15=EUR|17=EX-SWAP-1|31=1.08400|32=10000000|"
+        "37=ORD-SWAP-1|38=10000000|39=2|40=D|44=1.08400|54=1|55=EUR/USD|"
+        "60=20240115-10:32:00|64=20240117|117=Q-10|150=F|151=0|"
+        "192=10000000|193=20240417|194=1.08380|640=1.08490|6160=1.08500|"
+        "7070=20240115|7071=FX-STD|10=000|"
+    ),
+    "360T: NDF Execution": (
+        "8=FIX.4.4|9=0|35=8|49=360T|56=CLIENT|34=7|52=20240115-10:33:00|"
+        "1=ACME|6=0|11=CL-NDF-1|14=5000000|15=USD|17=EX-NDF-1|31=1320.50|32=5000000|"
+        "37=ORD-NDF-1|38=5000000|39=2|40=D|44=1320.50|54=1|55=USD/KRW|"
+        "60=20240115-10:33:00|541=20240413|64=20240417|117=Q-11|150=F|151=0|"
+        "194=1320.50|7070=20240115|7071=FX-STD|10=000|"
+    ),
 }
 
 
@@ -136,13 +169,16 @@ def _render_swap_trade_summary(trade: Any, message: Any) -> None:
             f" &nbsp;·&nbsp; Far leg → *{trade.far_leg_action}*"
         )
         if trade.swap_side_source == "legs":
-            st.caption(
-                "Source: explicit per-leg LegSide (tag 624) in the NoLegs (555) group."
-            )
+            st.caption("Source: explicit per-leg LegSide (tag 624) in the NoLegs (555) group.")
         elif trade.swap_side_source == "parent":
             st.caption(
                 "Convention: order Side (54) describes the action on the far leg"
                 " in the trade currency; the near leg is the opposite."
+            )
+        elif trade.swap_side_source == "360t":
+            st.caption(
+                "Convention (360T): Side (54) is relative to the base currency"
+                " on the far leg; the near leg is the opposite."
             )
 
     # Pricing — spot rate, swap points (with pips), price precision
@@ -157,9 +193,7 @@ def _render_swap_trade_summary(trade: Any, message: Any) -> None:
             px_fmt.format(trade.spot_rate) if trade.spot_rate is not None else "N/A",
         )
     with pricing_cols[1]:
-        pts_value = (
-            pts_fmt.format(trade.swap_points) if trade.swap_points is not None else "N/A"
-        )
+        pts_value = pts_fmt.format(trade.swap_points) if trade.swap_points is not None else "N/A"
         pts_delta = (
             f"{pips_fmt.format(trade.swap_points_pips)} pips"
             if trade.swap_points_pips is not None
@@ -277,9 +311,11 @@ def main() -> None:
             # both an explicit venue and one auto-detected from the comp IDs.
             venue_handler = venue_registry.get(message.venue) if message.venue else None
 
-            # Detect product type
+            # Detect product type. Prefer a venue-derived product_type (set by
+            # the venue handler's enhance_message, e.g. 360T which sends no
+            # SecurityType) over the generic registry; fall back otherwise.
             product_handler = product_registry.detect(message)
-            if product_handler:
+            if product_handler and not message.product_type:
                 message.product_type = product_handler.product_type
 
             st.success("Message parsed successfully!")

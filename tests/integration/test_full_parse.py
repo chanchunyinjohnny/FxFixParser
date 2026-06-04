@@ -317,3 +317,14 @@ class TestLSEGFXMatchingRoundTrip:
         assert trade.far_settlement_date == "20260908"
         assert trade.swap_points == pytest.approx(0.001)
         assert trade.spot_rate == pytest.approx(1.0838)
+
+
+def test_all_360t_samples_parse() -> None:
+    """Every 360T RFS sample parses end-to-end with the 360T venue."""
+    from tests.fixtures.sample_messages import THREE_SIXTY_T_ALL_SAMPLES
+
+    parser = FixParser(config=ParserConfig(strict_checksum=False))
+    for raw in THREE_SIXTY_T_ALL_SAMPLES:
+        message = parser.parse(raw, venue="360T")
+        assert message.venue == "360T"
+        assert message.msg_type is not None

@@ -195,6 +195,13 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             2346,  # LegMidPx
             1074,  # LegCalculatedCcyLastQty (standard)
             1418,  # LegCalculatedCcyLastQty (LSEG variant; standard LegLastQty)
+            # 360T leg-level allocation (flattened nested NoLegAllocs) + leg mid.
+            # 360T accepts only one allocation per leg, so 671/673 never repeat
+            # within a leg and the flattening does not phantom-split entries.
+            670,  # NoLegAllocs (nested leg-allocation count, flattened)
+            671,  # LegAllocAccount
+            673,  # LegAllocQty
+            7652,  # LegMidPx (360T)
         },
     ),
     # Allocations
@@ -337,6 +344,39 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             628,  # HopCompID
             629,  # HopSendingTime
             630,  # HopRefID
+        },
+    ),
+    # 360T custom fields (QuoteRequest / ExecutionReport)
+    RepeatingGroupDefinition(
+        count_tag=7546,  # NoCustomFields
+        name="Custom Fields",
+        member_tags={
+            7547,  # CustomFieldName
+            7548,  # CustomFieldValue
+        },
+    ),
+    # Underlyings (360T SecurityDefinition tenor / value-date calendar)
+    RepeatingGroupDefinition(
+        count_tag=711,  # NoUnderlyings
+        name="Underlyings",
+        member_tags={
+            311,  # UnderlyingSymbol
+            305,  # UnderlyingSecurityIDSource
+            309,  # UnderlyingSecurityID (tenor short name)
+            312,  # UnderlyingSymbolSfx
+            307,  # UnderlyingSecurityDesc (tenor long name)
+            542,  # UnderlyingMaturityDate (value date)
+        },
+    ),
+    # Regulatory trade IDs (FIX 5.0 SP2; 360T ExecutionReport)
+    RepeatingGroupDefinition(
+        count_tag=1907,  # NoRegulatoryTradeIDs
+        name="Regulatory Trade IDs",
+        member_tags={
+            1903,  # RegulatoryTradeID
+            1905,  # RegulatoryTradeIDSource
+            1906,  # RegulatoryTradeIDType
+            2411,  # RegulatoryLegRefID
         },
     ),
 ]

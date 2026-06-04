@@ -23,13 +23,19 @@ def parse_symbol(symbol: str | None) -> tuple[str | None, str | None]:
     return (None, None)
 
 
+# Quote currencies whose rates are conventionally quoted to two decimal places,
+# so a pip is 0.01 rather than 0.0001 (e.g. USD/JPY 148.50, USD/KRW 1320.50).
+_TWO_DP_QUOTE_CCYS = {"JPY", "KRW"}
+
+
 def pip_size(symbol: str | None) -> float:
     """Return the pip size for a currency pair.
 
-    JPY-quoted pairs (term = JPY) use 0.01; everything else uses 0.0001.
+    Pairs quoted to two decimals (term currency JPY or KRW) use 0.01; everything
+    else uses 0.0001.
     """
     _, term = parse_symbol(symbol)
-    if term == "JPY":
+    if term in _TWO_DP_QUOTE_CCYS:
         return 0.01
     return 0.0001
 

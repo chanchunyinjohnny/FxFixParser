@@ -149,7 +149,7 @@ The sidebar includes built-in sample messages you can load with one click:
 |-------|-------------|
 | **Smart Trade (LiquidityFX)** | Multi-dealer FX platform with 120+ custom tags covering swap execution, tiered quotes, fixing orders, regulatory tracking, and more |
 | **FXGO (Bloomberg)** | Bloomberg's FX trading platform |
-| **360T** | Multi-bank FX trading platform |
+| **360T (RFS Market Taker)** | Deutsche Börse multi-bank FX RFS platform (FIX 4.4). Spot, Forward, Swap, NDF, NDS, FX Time Option and Block trades across QuoteRequest/Quote/QuoteCancel/NewOrderSingle/NewOrderMultileg/ExecutionReport/SecurityDefinition. Derives product type (no SecurityType is sent) and extracts 360T swap economics — Side relative to the base currency on the far leg, far-leg rates from 6050/6051 quotes and 6160 fills |
 | **Bloomberg DOR** | Bloomberg Derivatives Order Routing with 47 custom tags for algo execution, tenor support, and multi-leg instruments |
 | **SGX Titan OTC** | SGX Titan OTC FIX 5.0 SP2 gateway for SGX listed FX futures (KRW/USD, USD/CNH, FlexC variants, etc.) |
 | **LSEG / Refinitiv FX Matching (MAPI)** | Anonymous interbank FX Matching central-limit-order-book; FX Spot and FX Forward Swap over FIX 5.0 SP2 / FIXT 1.1, including the forward-swap quote-negotiation messages |

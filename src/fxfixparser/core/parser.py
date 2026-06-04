@@ -197,8 +197,7 @@ class FixParser:
 
         self._spec_dict_cache[cache_key] = merged
         logger.debug(
-            "Layered FIX spec for ApplVerID=%s onto base dictionary "
-            "(%d fields added).",
+            "Layered FIX spec for ApplVerID=%s onto base dictionary " "(%d fields added).",
             appl_ver_id,
             len(merged.all_tags()) - len(self.dictionary.all_tags()),
         )

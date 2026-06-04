@@ -52,6 +52,34 @@ class TestRepeatingGroupDefinitions:
         # LFX custom tag for far leg tenor
         assert 8004 in group.member_tags  # SettlType2 (Far Leg Tenor)
 
+    def test_360t_custom_fields_group_defined(self) -> None:
+        group = get_group_definition(7546)
+        assert group is not None
+        assert 7547 in group.member_tags
+        assert 7548 in group.member_tags
+
+    def test_360t_underlyings_group_defined(self) -> None:
+        group = get_group_definition(711)
+        assert group is not None
+        assert 311 in group.member_tags  # UnderlyingSymbol
+        assert 309 in group.member_tags  # UnderlyingSecurityID
+        assert 542 in group.member_tags  # UnderlyingMaturityDate
+        assert 307 in group.member_tags  # UnderlyingSecurityDesc
+
+    def test_360t_regulatory_trade_id_group_defined(self) -> None:
+        group = get_group_definition(1907)
+        assert group is not None
+        assert 1903 in group.member_tags
+        assert 2411 in group.member_tags
+
+    def test_legs_group_includes_leg_allocs(self) -> None:
+        group = get_group_definition(555)
+        assert group is not None
+        assert 670 in group.member_tags  # NoLegAllocs
+        assert 671 in group.member_tags  # LegAllocAccount
+        assert 673 in group.member_tags  # LegAllocQty
+        assert 7652 in group.member_tags  # LegMidPx
+
     def test_unknown_group_returns_none(self) -> None:
         """Test that unknown count tag returns None."""
         group = get_group_definition(9999)

@@ -264,9 +264,7 @@ class VenueHandler(ABC):
             trade.swap_side_source = "legs"
         else:
             side_code = side_field.raw_value if side_field is not None else None
-            near_action, far_action = swap_side_actions(
-                side_code, trade.trade_currency, base, term
-            )
+            near_action, far_action = swap_side_actions(side_code, trade.trade_currency, base, term)
             trade.near_leg_action = near_action
             trade.far_leg_action = far_action
             if near_action or far_action:
