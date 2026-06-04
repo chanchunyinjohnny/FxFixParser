@@ -52,13 +52,19 @@ class TestFIX44XMLLoader:
     def test_covers_repeating_group_member_tags(self) -> None:
         """Test that all tags referenced in repeating groups are now defined."""
         from fxfixparser.tags.repeating_groups import REPEATING_GROUPS
+        from fxfixparser.venues.registry import VenueRegistry
 
         dictionary = TagDictionary.default()
+        venue_defined_tags = {
+            tag_def.tag
+            for venue in VenueRegistry.default().all_venues()
+            for tag_def in venue.custom_tags
+        }
         missing_tags: list[int] = []
 
         for group in REPEATING_GROUPS:
             for tag in group.member_tags:
-                if not dictionary.has_tag(tag):
+                if not dictionary.has_tag(tag) and tag not in venue_defined_tags:
                     missing_tags.append(tag)
 
         assert (

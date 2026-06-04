@@ -108,6 +108,17 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             1506,  # SideTradeID
             1507,  # SideOrigTradeID
             1597,  # SideClearingTradePrice
+            # LSEG FX Matching side-level tags (TradeCaptureReport NoSides entry).
+            # MAPI's proprietary MiFID tags stay venue-scoped in the dictionary
+            # overlay, but must still be group members so structured parsing
+            # does not terminate NoSides early.
+            1154,  # SideCurrency
+            1057,  # AggressorIndicator
+            1097,  # LastLimitAmt (MAPI FXSPOT credit drawn; std PegSecurityID)
+            1149,  # LimitRemainingAmt (MAPI FXSPOT credit remaining; std HighLimitPrice)
+            31344,  # TR_TradingCapacity (MAPI MiFID II)
+            31345,  # TR_Npft (MAPI MiFID II)
+            126,  # ExpireTime
         },
     ),
     # Related symbols (Quote Request, Market Data Request)
@@ -182,6 +193,8 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             1067,  # LegBidForwardPoints
             1068,  # LegOfferForwardPoints
             2346,  # LegMidPx
+            1074,  # LegCalculatedCcyLastQty (standard)
+            1418,  # LegCalculatedCcyLastQty (LSEG variant; standard LegLastQty)
         },
     ),
     # Allocations
@@ -231,6 +244,99 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
         member_tags={
             336,  # TradingSessionID
             625,  # TradingSessionSubID
+        },
+    ),
+    # Stipulations (LSEG forward-swap negotiation; Quote / TradeCaptureReport)
+    RepeatingGroupDefinition(
+        count_tag=232,  # NoStipulations
+        name="Stipulations",
+        member_tags={
+            233,  # StipulationType
+            234,  # StipulationValue
+        },
+    ),
+    # Strategy parameters (Iceberg orders)
+    RepeatingGroupDefinition(
+        count_tag=957,  # NoStrategyParameters
+        name="Strategy Parameters",
+        member_tags={
+            958,  # StrategyParameterName
+            959,  # StrategyParameterType
+            960,  # StrategyParameterValue
+        },
+    ),
+    # Root Parties (LSEG TradeCaptureReport carries party identity here, not 453)
+    RepeatingGroupDefinition(
+        count_tag=1116,  # NoRootPartyIDs
+        name="Root Parties",
+        member_tags={
+            1117,  # RootPartyID
+            1118,  # RootPartyIDSource
+            1119,  # RootPartyRole
+            # Nested RootPartySubIDs (1120) children, flattened (as 453/802).
+            1120,  # NoRootPartySubIDs
+            1121,  # RootPartySubID
+            1122,  # RootPartySubIDType
+        },
+    ),
+    # Settlement Parties (CLS / payment instructions)
+    RepeatingGroupDefinition(
+        count_tag=781,  # NoSettlPartyIDs
+        name="Settlement Parties",
+        member_tags={
+            782,  # SettlPartyID
+            783,  # SettlPartyIDSource
+            784,  # SettlPartyRole
+            # Nested SettlPartySubIDs (801) children, flattened.
+            801,  # NoSettlPartySubIDs
+            785,  # SettlPartySubID
+            786,  # SettlPartySubIDType
+        },
+    ),
+    # Settlement Details (LSEG TradeCaptureReport; nests SettlParties)
+    RepeatingGroupDefinition(
+        count_tag=1158,  # NoSettlDetails
+        name="Settlement Details",
+        member_tags={
+            1164,  # SettlObligSource
+            # Nested SettlParties (781) flattened into the parent.
+            781,  # NoSettlPartyIDs
+            782,  # SettlPartyID
+            783,  # SettlPartyIDSource
+            784,  # SettlPartyRole
+            801,  # NoSettlPartySubIDs
+            785,  # SettlPartySubID
+            786,  # SettlPartySubIDType
+        },
+    ),
+    # Limit Amounts (LSEG FXSPOT credit limits)
+    RepeatingGroupDefinition(
+        count_tag=1630,  # NoLimitAmts
+        name="Limit Amounts",
+        member_tags={
+            1631,  # LimitAmtType
+            1632,  # LastLimitAmt
+            1633,  # LimitAmtRemaining
+            1634,  # LimitAmtCurrency
+        },
+    ),
+    # Order Attributes (MiFID II liquidity-provision flag)
+    RepeatingGroupDefinition(
+        count_tag=2593,  # NoOrderAttributes
+        name="Order Attributes",
+        member_tags={
+            2594,  # OrderAttributeType
+            2595,  # OrderAttributeValue
+        },
+    ),
+    # Hops (FIXT 1.1 message routing)
+    RepeatingGroupDefinition(
+        count_tag=627,  # NoHops
+        name="Hops",
+        member_tags={
+            628,  # HopCompID
+            629,  # HopSendingTime
+            630,  # HopRefID
         },
     ),
 ]

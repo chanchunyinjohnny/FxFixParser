@@ -2,6 +2,7 @@
 
 from fxfixparser.venues.base import VenueHandler
 from fxfixparser.venues.fxgo import FXGOHandler
+from fxfixparser.venues.lseg_fx_matching import LSEGFXMatchingHandler
 from fxfixparser.venues.registry import VenueRegistry
 from fxfixparser.venues.smart_trade import SmartTradeHandler
 from fxfixparser.venues.three_sixty_t import ThreeSixtyTHandler
@@ -12,4 +13,5 @@ __all__ = [
     "SmartTradeHandler",
     "FXGOHandler",
     "ThreeSixtyTHandler",
+    "LSEGFXMatchingHandler",
 ]

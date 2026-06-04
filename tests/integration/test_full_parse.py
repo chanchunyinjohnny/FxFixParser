@@ -4,10 +4,12 @@ import pytest
 
 from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.products.base import ProductRegistry
+from fxfixparser.venues.lseg_fx_matching import LSEGFXMatchingHandler
 from fxfixparser.venues.registry import VenueRegistry
 from fxfixparser.venues.sgx_titan_otc import SGXTitanOTCHandler
 from tests.fixtures.sample_messages import (
     FORWARD_MESSAGE,
+    LSEG_FXM_SWAP_EXECUTION,
     NDF_MESSAGE,
     SGX_TITAN_OTC_KU_TRADE_CAPTURE,
     SGX_TITAN_OTC_KUTM_FLEXC_TRADE_CAPTURE,
@@ -281,3 +283,37 @@ class TestSGXFXFuturesRoundTrip:
         details = product.extract_details(msg)
         assert details["product_code"] == "UC"
         assert details["product_name"] == "USD/CNH FX Futures"
+
+
+class TestLSEGFXMatchingRoundTrip:
+    """End-to-end parse of an LSEG FX Matching (MAPI) swap execution."""
+
+    @pytest.fixture
+    def parser(self) -> FixParser:
+        return FixParser(config=ParserConfig(strict_checksum=False, strict_body_length=False))
+
+    @pytest.fixture
+    def product_registry(self) -> ProductRegistry:
+        return ProductRegistry.default()
+
+    def test_swap_execution_round_trip(
+        self, parser: FixParser, product_registry: ProductRegistry
+    ) -> None:
+        msg = parser.parse(LSEG_FXM_SWAP_EXECUTION, auto_detect_venue=True)
+
+        # Venue auto-detected from TargetCompID(56)="TR MATCHING".
+        assert msg.venue == "LSEG FX Matching"
+        # FIX 5.0 SP2 standard tags decode via the auto-loaded spec (1128=9).
+        assert msg.get_field(167).value_description == "FX Forward Swap (Near/Far two-leg)"
+
+        product = product_registry.detect(msg)
+        assert product is not None
+        assert product.product_type == "Swap"
+
+        trade = LSEGFXMatchingHandler().extract_trade(msg)
+        assert trade.is_swap is True
+        assert trade.symbol == "EUR/USD"
+        assert trade.settlement_date == "20260606"
+        assert trade.far_settlement_date == "20260908"
+        assert trade.swap_points == pytest.approx(0.001)
+        assert trade.spot_rate == pytest.approx(1.0838)

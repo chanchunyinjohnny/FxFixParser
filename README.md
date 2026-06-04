@@ -28,7 +28,7 @@ These cryptic tag-number pairs are hard to read without constantly referencing t
 
 - **Instant tag translation** — every FIX tag is mapped to its field name and human-readable description
 - **Enumerated value decoding** — coded values like `54=1` are decoded to "Buy", `39=2` to "Filled", etc.
-- **Venue-aware parsing** — recognises messages from Smart Trade, FXGO (Bloomberg), 360T, and Bloomberg DOR, including their proprietary custom tags
+- **Venue-aware parsing** — recognises messages from Smart Trade, FXGO (Bloomberg), 360T, Bloomberg DOR, SGX Titan OTC, and LSEG / Refinitiv FX Matching (MAPI), including their proprietary custom tags
 - **FX product detection** — automatically identifies whether a message is a Spot, Forward, Swap, NDF, Futures, or Options trade
 - **Trade summary** — extracts key trade details (symbol, side, quantity, price, settlement date) at a glance
 - **Repeating group support** — correctly parses and displays nested groups like market data entries, legs, and party IDs
@@ -151,8 +151,10 @@ The sidebar includes built-in sample messages you can load with one click:
 | **FXGO (Bloomberg)** | Bloomberg's FX trading platform |
 | **360T** | Multi-bank FX trading platform |
 | **Bloomberg DOR** | Bloomberg Derivatives Order Routing with 47 custom tags for algo execution, tenor support, and multi-leg instruments |
+| **SGX Titan OTC** | SGX Titan OTC FIX 5.0 SP2 gateway for SGX listed FX futures (KRW/USD, USD/CNH, FlexC variants, etc.) |
+| **LSEG / Refinitiv FX Matching (MAPI)** | Anonymous interbank FX Matching central-limit-order-book; FX Spot and FX Forward Swap over FIX 5.0 SP2 / FIXT 1.1, including the forward-swap quote-negotiation messages |
 
-Venue is auto-detected from the SenderCompID (tag 49) in the message. You can also select a venue manually from the sidebar.
+Venue is auto-detected from the message's component IDs — SenderCompID (tag 49), TargetCompID (tag 56), or OnBehalfOfCompID (tag 115) — so client-to-venue messages resolve too (e.g. LSEG FX Matching is recognised by the constant gateway CompID `TR MATCHING`). You can also select a venue manually from the sidebar.
 
 ## Supported FIX Versions
 
@@ -163,8 +165,8 @@ The parser is version-agnostic at the byte level — it parses any FIX `tag=valu
 | **FIX 4.4** | Standard FIX 4.4 fields (loaded from bundled `spec/FIX44.xml`) | Yes |
 | **FIXT 1.1 session tags** | 1128 ApplVerID, 1129 CstmApplVerID, 1156 ApplExtID | Yes (merged into default) |
 | **FX extensions** | Curated FX-specific tags and enum descriptions | Yes (merged into default) |
-| **Venue custom tags** | Smart Trade, FXGO, 360T, Bloomberg DOR, SGX Titan OTC | Merged when venue is detected/selected |
-| **FIX 5.0 SP2** | Standard FIX 5.0 SP2 fields (bundled `spec/FIX50SP2.xml`) | Opt-in via `load_fix_spec_fields()` |
+| **Venue custom tags** | Smart Trade, FXGO, 360T, Bloomberg DOR, SGX Titan OTC, LSEG FX Matching | Merged when venue is detected/selected |
+| **FIX 5.0 SP2** | Standard FIX 5.0 SP2 fields (bundled `spec/FIX50SP2.xml`) | Auto-loaded when a message carries `1128=9` (ApplVerID); also available via `load_fix_spec_fields()` |
 
 ## Supported FX Products
 

@@ -114,6 +114,93 @@ FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
         "PRICE",
         "Mid price for an individual leg of a multi-leg instrument.",
     ),
+    # Standard FIX 5.0 SP2 tags used in repeating groups (RootParties,
+    # SettlDetails, LimitAmts, StrategyParameters, side/leg detail). Defined
+    # here so the default dictionary can name every repeating-group member tag.
+    # Venue handlers may override a subset for venue-specific meaning.
+    FixFieldDefinition(
+        1154, "SideCurrency", "CURRENCY", "Currency of a Trade Capture Report side."
+    ),
+    FixFieldDefinition(
+        1057,
+        "AggressorIndicator",
+        "BOOLEAN",
+        "Whether the order/side was the aggressor (liquidity taker) of the trade.",
+    ),
+    FixFieldDefinition(
+        1097,
+        "PegSecurityID",
+        "STRING",
+        "Security ID of the instrument a pegged order is pegged to.",
+    ),
+    FixFieldDefinition(
+        1149,
+        "HighLimitPrice",
+        "PRICE",
+        "Highest price (upper price band) permitted for the instrument.",
+    ),
+    FixFieldDefinition(
+        1074,
+        "LegCalculatedCcyLastQty",
+        "QTY",
+        "Calculated quoted-currency quantity for a leg of a multi-leg instrument.",
+    ),
+    FixFieldDefinition(
+        1418,
+        "LegLastQty",
+        "QTY",
+        "Quantity bought/sold for this leg of a multi-leg trade.",
+    ),
+    FixFieldDefinition(
+        958,
+        "StrategyParameterName",
+        "STRING",
+        "Name of a strategy parameter within the NoStrategyParameters group.",
+    ),
+    FixFieldDefinition(
+        959, "StrategyParameterType", "INT", "Data type of a strategy parameter value."
+    ),
+    FixFieldDefinition(
+        960,
+        "StrategyParameterValue",
+        "STRING",
+        "Value of a strategy parameter within the NoStrategyParameters group.",
+    ),
+    FixFieldDefinition(
+        1117, "RootPartyID", "STRING", "Party identifier within the NoRootPartyIDs group."
+    ),
+    FixFieldDefinition(1118, "RootPartyIDSource", "CHAR", "Source of the RootPartyID value."),
+    FixFieldDefinition(
+        1119, "RootPartyRole", "INT", "Role of the root party (mirrors PartyRole 452)."
+    ),
+    FixFieldDefinition(
+        1120, "NoRootPartySubIDs", "NUMINGROUP", "Number of RootPartySubIDs entries."
+    ),
+    FixFieldDefinition(1121, "RootPartySubID", "STRING", "Sub-identifier for a root party."),
+    FixFieldDefinition(
+        1122,
+        "RootPartySubIDType",
+        "INT",
+        "Type of the RootPartySubID (mirrors PartySubIDType 803).",
+    ),
+    FixFieldDefinition(
+        1164,
+        "SettlObligSource",
+        "CHAR",
+        "Source of the settlement obligation (e.g. buyer's/seller's instructions).",
+    ),
+    FixFieldDefinition(
+        1631, "LimitAmtType", "INT", "Type of limit amount within the NoLimitAmts group."
+    ),
+    FixFieldDefinition(
+        1632, "LastLimitAmt", "AMT", "Limit amount drawn down by the trade (NoLimitAmts group)."
+    ),
+    FixFieldDefinition(
+        1633, "LimitAmtRemaining", "AMT", "Limit amount remaining (NoLimitAmts group)."
+    ),
+    FixFieldDefinition(
+        1634, "LimitAmtCurrency", "CURRENCY", "Currency of the limit amounts (NoLimitAmts group)."
+    ),
     FixFieldDefinition(
         624,
         "LegSide",

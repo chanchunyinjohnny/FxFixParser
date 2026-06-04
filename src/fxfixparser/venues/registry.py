@@ -4,6 +4,7 @@ from fxfixparser.core.message import FixMessage
 from fxfixparser.venues.base import VenueHandler
 from fxfixparser.venues.bloomberg_dor import BloombergDORHandler
 from fxfixparser.venues.fxgo import FXGOHandler
+from fxfixparser.venues.lseg_fx_matching import LSEGFXMatchingHandler
 from fxfixparser.venues.sgx_titan_otc import SGXTitanOTCHandler
 from fxfixparser.venues.smart_trade import SmartTradeHandler
 from fxfixparser.venues.three_sixty_t import ThreeSixtyTHandler
@@ -64,4 +65,5 @@ class VenueRegistry:
         registry.register(ThreeSixtyTHandler())
         registry.register(BloombergDORHandler())
         registry.register(SGXTitanOTCHandler())
+        registry.register(LSEGFXMatchingHandler())
         return registry
