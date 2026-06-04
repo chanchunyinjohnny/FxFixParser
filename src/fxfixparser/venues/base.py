@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from fxfixparser.core.field import FixFieldDefinition
+from fxfixparser.core.field import FixField, FixFieldDefinition
 from fxfixparser.core.fx_math import parse_symbol, pip_size, swap_side_actions
 from fxfixparser.core.message import FixMessage, ParsedTrade
 
@@ -179,7 +179,7 @@ class VenueHandler(ABC):
         self,
         message: FixMessage,
         trade: ParsedTrade,
-        side_field: object,
+        side_field: FixField | None,
         leg_entries: list[dict[str, str]],
     ) -> None:
         """Populate swap-specific fields for an order/execution.
@@ -428,3 +428,14 @@ class VenueHandler(ABC):
         if not sender_comp_id:
             return False
         return sender_comp_id.upper() in [s.upper() for s in self.sender_comp_ids]
+
+    def claims_message(self, message: FixMessage) -> bool:
+        """Return True if this handler recognises the message by its protocol
+        or content, independent of CompID matching.
+
+        ``VenueRegistry.detect_from_message`` consults this before falling back
+        to CompID matching, letting a handler claim a message whose CompID is
+        generic or ambiguous. The default abstains; only venues with a
+        distinctive on-wire dialect override it.
+        """
+        return False

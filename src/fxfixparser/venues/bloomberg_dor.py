@@ -8,7 +8,27 @@ Standard FIX tags are already provided by the bundled FIX44.xml spec.
 """
 
 from fxfixparser.core.field import FixFieldDefinition
+from fxfixparser.core.message import FixMessage
 from fxfixparser.venues.base import VenueHandler
+
+# CompIDs that identify Bloomberg traffic — the FXGO platform plus the DOR/ORP
+# routing protocol. Used to scope protocol-aware detection so Bloomberg DOR never
+# claims another venue's FIXT.1.1 / FIX 5.0 messages.
+_BLOOMBERG_COMP_IDS = {
+    "FXGO",
+    "BLOOMBERG",
+    "BBG",
+    "BFXGO",
+    "BLOOMBERG_DOR",
+    "BBGDOR",
+    "DOR",
+    "FXOM",
+    "ORP",
+}
+
+# Routing CompIDs that appear on OnBehalfOfCompID (115) / DeliverToCompID (128)
+# for ORP/DOR order routing.
+_DOR_ROUTING_IDS = {"DOR", "FXOM", "ORP", "BLOOMBERG_DOR", "BBGDOR"}
 
 # Bloomberg DOR custom tag definitions for FX-specific fields.
 # Standard FIX tags (e.g. 8, 35, 55, 167) are covered by FIX44.xml.
@@ -205,3 +225,29 @@ class BloombergDORHandler(VenueHandler):
                 "4025": "Legal Entity Identifier",
             },
         }
+
+    def claims_message(self, message: FixMessage) -> bool:
+        """Claim Bloomberg ORP/DOR messages by their protocol markers, even when
+        only a generic Bloomberg CompID (e.g. 49=BLOOMBERG) matched — so they are
+        not mis-detected as Bloomberg FXGO.
+
+        Requires BOTH a Bloomberg CompID and a DOR/ORP protocol marker, so the
+        claim can never steal another venue's FIXT.1.1 traffic.
+        """
+        comp_ids = {(message.get_value(tag) or "").upper() for tag in (49, 56, 115, 128)}
+        if comp_ids.isdisjoint(_BLOOMBERG_COMP_IDS):
+            return False
+        # DOR/ORP routing markers on OnBehalfOfCompID (115) / DeliverToCompID (128).
+        if (message.get_value(115) or "").upper() in _DOR_ROUTING_IDS:
+            return True
+        if (message.get_value(128) or "").upper() in _DOR_ROUTING_IDS:
+            return True
+        # DOR-only FIX 5.0 message types: QuoteStatusReport (AI), QuoteRequestReject (AG).
+        if message.msg_type in ("AI", "AG"):
+            return True
+        # FIXT 1.1 session / FIX 5.0 application layer — Bloomberg FXGO is plain FIX 4.4.
+        if message.begin_string == "FIXT.1.1":
+            return True
+        if message.get_value(1128):
+            return True
+        return False

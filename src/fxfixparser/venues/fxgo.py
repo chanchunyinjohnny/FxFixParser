@@ -8,7 +8,7 @@ class FXGOHandler(VenueHandler):
 
     @property
     def name(self) -> str:
-        return "FXGO"
+        return "Bloomberg FXGO"
 
     @property
     def sender_comp_ids(self) -> list[str]:

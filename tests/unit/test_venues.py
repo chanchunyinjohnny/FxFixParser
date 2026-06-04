@@ -11,6 +11,7 @@ from fxfixparser.venues.registry import VenueRegistry
 from fxfixparser.venues.smart_trade import SmartTradeHandler
 from fxfixparser.venues.three_sixty_t import ThreeSixtyTHandler
 from tests.fixtures.sample_messages import (
+    BLOOMBERG_DOR_GENERIC_COMPID_EXEC,
     BLOOMBERG_DOR_SPOT_EXEC,
     BLOOMBERG_DOR_SPOT_RFQ,
     FORWARD_MESSAGE,
@@ -27,7 +28,7 @@ class TestVenueHandlers:
         """Test FXGO handler properties."""
         handler = FXGOHandler()
 
-        assert handler.name == "FXGO"
+        assert handler.name == "Bloomberg FXGO"
         assert "FXGO" in handler.sender_comp_ids
         assert "BLOOMBERG" in handler.sender_comp_ids
 
@@ -96,7 +97,7 @@ class TestVenueHandlers:
         assert trade.quantity == 1000000.0
         assert trade.price == 1.0850
         assert trade.currency == "EUR"
-        assert trade.venue == "FXGO"
+        assert trade.venue == "Bloomberg FXGO"
 
     def test_extract_trade_smart_trade(self) -> None:
         """Test trade extraction from Smart Trade swap execution report."""
@@ -139,7 +140,7 @@ class TestVenueHandlers:
         handler = FXGOHandler()
         enhanced = handler.enhance_message(message)
 
-        assert enhanced.venue == "FXGO"
+        assert enhanced.venue == "Bloomberg FXGO"
         assert enhanced is message  # Same object, mutated
 
     def test_enhance_message_smart_trade(self) -> None:
@@ -197,8 +198,8 @@ class TestVenueRegistry:
         handler = FXGOHandler()
         registry.register(handler)
 
-        assert registry.get("FXGO") == handler
-        assert registry.get("fxgo") == handler
+        assert registry.get("Bloomberg FXGO") == handler
+        assert registry.get("bloomberg fxgo") == handler
 
     def test_get_by_sender_id(self) -> None:
         """Test getting handler by SenderCompID."""
@@ -210,7 +211,7 @@ class TestVenueRegistry:
         smart_trade = registry.get_by_sender_id("SMARTTRADE")
         assert fxgo is not None
         assert smart_trade is not None
-        assert fxgo.name == "FXGO"
+        assert fxgo.name == "Bloomberg FXGO"
         assert smart_trade.name == "Smart Trade (LiquidityFX)"
         assert registry.get_by_sender_id("UNKNOWN") is None
 
@@ -219,7 +220,7 @@ class TestVenueRegistry:
         venues = venue_registry.all_venues()
         venue_names = [v.name for v in venues]
 
-        assert "FXGO" in venue_names
+        assert "Bloomberg FXGO" in venue_names
         assert "Smart Trade (LiquidityFX)" in venue_names
         assert "360T" in venue_names
 
@@ -231,7 +232,7 @@ class TestVenueRegistry:
         fxgo_msg = parser.parse(SPOT_MESSAGE_PIPE)
         handler = venue_registry.get_by_sender_id(fxgo_msg.sender_comp_id)
         assert handler is not None
-        assert handler.name == "FXGO"
+        assert handler.name == "Bloomberg FXGO"
 
         # 360T message
         msg_360t = parser.parse(FORWARD_MESSAGE)
@@ -249,6 +250,12 @@ class TestVenueRegistry:
         venues = venue_registry.all_venues()
         venue_names = [v.name for v in venues]
         assert "Bloomberg DOR" in venue_names
+
+    def test_bloomberg_venues_are_adjacent(self, venue_registry: VenueRegistry) -> None:
+        """Bloomberg FXGO and Bloomberg DOR sit next to each other so the UI
+        dropdown groups the two Bloomberg entries together."""
+        names = [v.name for v in venue_registry.all_venues()]
+        assert names.index("Bloomberg DOR") == names.index("Bloomberg FXGO") + 1
 
     def test_venue_detection_bloomberg_dor(self, venue_registry: VenueRegistry) -> None:
         parser = FixParser(config=ParserConfig(strict_checksum=False))
@@ -287,6 +294,73 @@ class TestVenueRegistry:
         parser = FixParser(config=ParserConfig(strict_checksum=False))
         msg = parser.parse(SIMPLE_MESSAGE)
         assert venue_registry.detect_from_message(msg) is None
+
+    def test_generic_bloomberg_compid_resolves_to_dor_not_fxgo(
+        self, venue_registry: VenueRegistry
+    ) -> None:
+        """A FIXT.1.1 DOR message with a generic 49=BLOOMBERG is detected as
+        Bloomberg DOR via protocol markers — even though that CompID alone
+        matches Bloomberg FXGO."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        msg = parser.parse(BLOOMBERG_DOR_GENERIC_COMPID_EXEC)
+
+        # CompID alone resolves to FXGO:
+        fxgo = venue_registry.get_by_sender_id("BLOOMBERG")
+        assert fxgo is not None
+        assert fxgo.name == "Bloomberg FXGO"
+
+        # Full protocol-aware detection picks DOR:
+        detected = venue_registry.detect_from_message(msg)
+        assert detected is not None
+        assert detected.name == "Bloomberg DOR"
+
+    def test_plain_fxgo_message_still_detected(self, venue_registry: VenueRegistry) -> None:
+        """A plain FIX.4.4 Bloomberg FXGO execution is still resolved to
+        Bloomberg FXGO — the protocol-aware claims pass must not swallow it."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        msg = parser.parse(SPOT_MESSAGE_PIPE)
+        detected = venue_registry.detect_from_message(msg)
+        assert detected is not None
+        assert detected.name == "Bloomberg FXGO"
+
+
+class TestBloombergDORClaimsMessage:
+    """Protocol-aware detection: when does Bloomberg DOR claim a message?"""
+
+    def _msg(self, tag_values: Mapping[int, str]) -> FixMessage:
+        return FixMessage(fields=[FixField(tag=t, raw_value=v) for t, v in tag_values.items()])
+
+    def test_claims_generic_bloomberg_compid_over_fixt11(self) -> None:
+        handler = BloombergDORHandler()
+        msg = self._msg({8: "FIXT.1.1", 35: "8", 49: "BLOOMBERG", 56: "CLIENT"})
+        assert handler.claims_message(msg) is True
+
+    def test_claims_on_dor_routing_id_115(self) -> None:
+        handler = BloombergDORHandler()
+        msg = self._msg({8: "FIX.4.4", 35: "8", 49: "BLOOMBERG", 115: "DOR"})
+        assert handler.claims_message(msg) is True
+
+    def test_claims_on_dor_only_msg_type(self) -> None:
+        handler = BloombergDORHandler()
+        msg = self._msg({8: "FIX.4.4", 35: "AI", 49: "BLOOMBERG"})
+        assert handler.claims_message(msg) is True
+
+    def test_claims_on_appl_ver_id(self) -> None:
+        handler = BloombergDORHandler()
+        msg = self._msg({8: "FIXT.1.1", 35: "S", 49: "BBG", 1128: "9"})
+        assert handler.claims_message(msg) is True
+
+    def test_does_not_claim_other_venue_fixt11(self) -> None:
+        # A FIXT.1.1 / FIX5.0 message from another venue (no Bloomberg CompID)
+        # must NOT be claimed by DOR.
+        handler = BloombergDORHandler()
+        msg = self._msg({8: "FIXT.1.1", 35: "8", 49: "TR MATCHING", 1128: "9"})
+        assert handler.claims_message(msg) is False
+
+    def test_does_not_claim_plain_fxgo_message(self) -> None:
+        handler = BloombergDORHandler()
+        msg = self._msg({8: "FIX.4.4", 35: "8", 49: "FXGO", 56: "CLIENT"})
+        assert handler.claims_message(msg) is False
 
 
 class TestSymbolFallback:

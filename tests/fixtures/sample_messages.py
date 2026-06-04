@@ -225,6 +225,20 @@ BLOOMBERG_DOR_SPOT_QUOTE = (
     "10=000|"
 )
 
+# Bloomberg DOR exec carrying a GENERIC Bloomberg CompID (49=BLOOMBERG) and NO
+# DOR-specific routing CompID — a synthetic edge case for detection tests. By
+# CompID alone this matches Bloomberg FXGO (which lists the generic "BLOOMBERG");
+# the FIXT.1.1 BeginString is the ORP/DOR protocol marker that must win.
+BLOOMBERG_DOR_GENERIC_COMPID_EXEC = (
+    "8=FIXT.1.1|9=300|35=8|49=BLOOMBERG|56=CLIENT|34=1|"
+    "52=20240115-10:30:00|"
+    "37=ORD200|11=CL200|17=EXEC200|150=F|39=2|"
+    "55=EUR/USD|167=FXSPOT|460=4|54=1|15=EUR|"
+    "32=1000000|31=1.08500|194=1.08500|"
+    "64=20240117|75=20240115|120=USD|"
+    "60=20240115-10:30:00|10=000|"
+)
+
 # SGX Titan OTC FX futures samples.
 # BeginString uses FIXT.1.1 per the SGX spec (FIX 5.0 SP2 application
 # layer over FIXT 1.1 session layer). Body length and checksum are

@@ -40,12 +40,19 @@ class VenueRegistry:
         return None
 
     def detect_from_message(self, message: FixMessage) -> VenueHandler | None:
-        """Detect a venue handler from a parsed message's component IDs.
+        """Detect a venue handler from a parsed message.
 
-        Checks SenderCompID (49), TargetCompID (56) and OnBehalfOfCompID
-        (115) in that order, so client-to-venue messages — where the venue
-        appears as the target rather than the sender — are detected too.
+        Two passes:
+          1. Protocol-aware claim — a handler may recognise the message by its
+             protocol/content (e.g. Bloomberg DOR's ORP/DOR FIXT.1.1 dialect)
+             even when only a generic CompID matched.
+          2. CompID match — SenderCompID (49), TargetCompID (56) and
+             OnBehalfOfCompID (115), in that order, so client-to-venue messages
+             (venue as target rather than sender) resolve too.
         """
+        for candidate in self._venues.values():
+            if candidate.claims_message(message):
+                return candidate
         for tag in _VENUE_ID_TAGS:
             handler = self.get_by_sender_id(message.get_value(tag))
             if handler is not None:
@@ -62,8 +69,8 @@ class VenueRegistry:
         registry = cls()
         registry.register(SmartTradeHandler())
         registry.register(FXGOHandler())
-        registry.register(ThreeSixtyTHandler())
         registry.register(BloombergDORHandler())
+        registry.register(ThreeSixtyTHandler())
         registry.register(SGXTitanOTCHandler())
         registry.register(LSEGFXMatchingHandler())
         return registry

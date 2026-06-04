@@ -76,7 +76,7 @@ venue_registry = VenueRegistry.default()
 # Auto-detect venue from SenderCompID
 venue_handler = venue_registry.get_by_sender_id(message.sender_comp_id)
 if venue_handler:
-    print(venue_handler.name)  # "FXGO"
+    print(venue_handler.name)  # "Bloomberg FXGO"
 
     # Enhance message with venue-specific tag definitions
     message = venue_handler.enhance_message(message)
@@ -175,9 +175,14 @@ Products are checked in order of specificity (most specific first):
 | Venue | Recognised SenderCompID Values |
 |-------|-------------------------------|
 | Smart Trade | `SMARTTRADE`, `SMTRADE`, `ST`, `LFX_CORE`, `LFX`, `UAT.ATP.RFS.MKT` |
-| FXGO | `FXGO`, `BLOOMBERG`, `BBG`, `BFXGO` |
-| 360T | `360T`, `THREESIXTYT`, `360TGTX` |
+| Bloomberg FXGO | `FXGO`, `BLOOMBERG`, `BBG`, `BFXGO` |
 | Bloomberg DOR | `BLOOMBERG_DOR`, `BBGDOR`, `DOR`, `FXOM`, `ORP` |
+| 360T | `360T`, `THREESIXTYT`, `360TGTX` |
+
+> Detection is two-pass: Bloomberg DOR first claims any message carrying a
+> Bloomberg CompID **and** an ORP/DOR protocol marker (FIXT 1.1 BeginString,
+> ApplVerID 1128, a `DOR`/`FXOM`/`ORP` routing CompID on tag 115/128, or msg
+> type AI/AG); otherwise the CompID table above applies.
 
 ## Common FIX Tags Reference
 

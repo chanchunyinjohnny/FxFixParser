@@ -8,6 +8,7 @@ from fxfixparser.venues.lseg_fx_matching import LSEGFXMatchingHandler
 from fxfixparser.venues.registry import VenueRegistry
 from fxfixparser.venues.sgx_titan_otc import SGXTitanOTCHandler
 from tests.fixtures.sample_messages import (
+    BLOOMBERG_DOR_GENERIC_COMPID_EXEC,
     FORWARD_MESSAGE,
     LSEG_FXM_SWAP_EXECUTION,
     NDF_MESSAGE,
@@ -56,7 +57,7 @@ class TestFullParseWorkflow:
         message.product_type = product_handler.product_type
 
         # Verify results
-        assert message.venue == "FXGO"
+        assert message.venue == "Bloomberg FXGO"
         assert message.product_type == "Spot"
         assert message.get_value(55) == "EUR/USD"
 
@@ -127,7 +128,7 @@ class TestFullParseWorkflow:
         assert product_handler is not None
         message.product_type = product_handler.product_type
 
-        assert message.venue == "FXGO"
+        assert message.venue == "Bloomberg FXGO"
         assert message.product_type == "NDF"
         assert message.get_value(120) == "USD"  # Settlement currency
 
@@ -225,7 +226,14 @@ class TestFullParseWorkflow:
         assert trade.quantity == 5000000.0
         assert trade.price == 1320.50
         assert trade.currency == "USD"
-        assert trade.venue == "FXGO"
+        assert trade.venue == "Bloomberg FXGO"
+
+    def test_dor_generic_compid_autodetects_as_dor(self) -> None:
+        """The full parser path resolves a generic-CompID ORP/DOR message to
+        Bloomberg DOR, not Bloomberg FXGO."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        msg = parser.parse(BLOOMBERG_DOR_GENERIC_COMPID_EXEC, auto_detect_venue=True)
+        assert msg.venue == "Bloomberg DOR"
 
 
 class TestSGXFXFuturesRoundTrip:
