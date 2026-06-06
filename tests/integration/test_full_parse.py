@@ -85,7 +85,7 @@ class TestFullParseWorkflow:
         assert product_handler is not None
         message.product_type = product_handler.product_type
 
-        assert message.venue == "360T"
+        assert message.venue == "360T RFS"
         assert message.product_type == "Forward"
         assert message.get_value(195) == "0.0050"  # Forward points
 
@@ -188,7 +188,7 @@ class TestFullParseWorkflow:
         assert trade.quantity == 5000000.0
         assert trade.price == 1.0900
         assert trade.currency == "EUR"
-        assert trade.venue == "360T"
+        assert trade.venue == "360T RFS"
         assert trade.settlement_date == "20240415"
 
     def test_swap_trade_extraction(
@@ -328,11 +328,23 @@ class TestLSEGFXMatchingRoundTrip:
 
 
 def test_all_360t_samples_parse() -> None:
-    """Every 360T RFS sample parses end-to-end with the 360T venue."""
+    """Every 360T RFS sample parses end-to-end. Passing the legacy venue name
+    "360T" still resolves (sender alias) and canonicalises to "360T RFS"."""
     from tests.fixtures.sample_messages import THREE_SIXTY_T_ALL_SAMPLES
 
     parser = FixParser(config=ParserConfig(strict_checksum=False))
     for raw in THREE_SIXTY_T_ALL_SAMPLES:
         message = parser.parse(raw, venue="360T")
-        assert message.venue == "360T"
+        assert message.venue == "360T RFS"
         assert message.msg_type is not None
+
+
+def test_all_360t_ti_samples_parse() -> None:
+    """Every 360T TI sample parses end-to-end and auto-detects as "360T TI"."""
+    from tests.fixtures.sample_messages import THREE_SIXTY_T_TI_ALL_SAMPLES
+
+    parser = FixParser(config=ParserConfig(strict_checksum=False))
+    for raw in THREE_SIXTY_T_TI_ALL_SAMPLES:
+        message = parser.parse(raw, auto_detect_venue=True)
+        assert message.venue == "360T TI"
+        assert message.msg_type == "8"

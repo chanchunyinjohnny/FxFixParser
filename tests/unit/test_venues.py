@@ -44,7 +44,7 @@ class TestVenueHandlers:
         """Test 360T handler properties."""
         handler = ThreeSixtyTHandler()
 
-        assert handler.name == "360T"
+        assert handler.name == "360T RFS"
         assert "360T" in handler.sender_comp_ids
 
     def test_fxgo_matches_sender(self) -> None:
@@ -128,7 +128,7 @@ class TestVenueHandlers:
         assert trade.quantity == 5000000.0
         assert trade.price == 1.0900
         assert trade.currency == "EUR"
-        assert trade.venue == "360T"
+        assert trade.venue == "360T RFS"
         assert trade.settlement_date == "20240415"
 
     def test_enhance_message_sets_venue(self) -> None:
@@ -222,7 +222,8 @@ class TestVenueRegistry:
 
         assert "Bloomberg FXGO" in venue_names
         assert "Smart Trade (LiquidityFX)" in venue_names
-        assert "360T" in venue_names
+        assert "360T RFS" in venue_names
+        assert "360T TI" in venue_names
 
     def test_venue_detection_from_message(self, venue_registry: VenueRegistry) -> None:
         """Test venue detection from parsed message."""
@@ -238,7 +239,7 @@ class TestVenueRegistry:
         msg_360t = parser.parse(FORWARD_MESSAGE)
         handler = venue_registry.get_by_sender_id(msg_360t.sender_comp_id)
         assert handler is not None
-        assert handler.name == "360T"
+        assert handler.name == "360T RFS"
 
         # Smart Trade message
         st_msg = parser.parse(SWAP_MESSAGE)
@@ -256,6 +257,12 @@ class TestVenueRegistry:
         dropdown groups the two Bloomberg entries together."""
         names = [v.name for v in venue_registry.all_venues()]
         assert names.index("Bloomberg DOR") == names.index("Bloomberg FXGO") + 1
+
+    def test_360t_venues_are_adjacent(self, venue_registry: VenueRegistry) -> None:
+        """360T RFS and 360T TI sit next to each other so the UI dropdown groups
+        the two 360T interfaces together."""
+        names = [v.name for v in venue_registry.all_venues()]
+        assert names.index("360T TI") == names.index("360T RFS") + 1
 
     def test_venue_detection_bloomberg_dor(self, venue_registry: VenueRegistry) -> None:
         parser = FixParser(config=ParserConfig(strict_checksum=False))

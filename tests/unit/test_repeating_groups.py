@@ -72,6 +72,41 @@ class TestRepeatingGroupDefinitions:
         assert 1903 in group.member_tags
         assert 2411 in group.member_tags
 
+    def test_party_ids_group_includes_role_qualifier(self) -> None:
+        # 360T TI carries PartyRoleQualifier(2376) inside party entries.
+        group = get_group_definition(453)
+        assert group is not None
+        assert 2376 in group.member_tags
+
+    def test_360t_ti_competing_quotes_group_defined(self) -> None:
+        group = get_group_definition(9516)
+        assert group is not None
+        assert group.name == "Competing Quotes"
+        assert 9517 in group.member_tags  # CompetingQuoteDealer
+        assert 9518 in group.member_tags  # CompetingQuote
+        assert 9520 in group.member_tags  # CompetingQuoteLeg2 (far leg)
+        # 9519 / 9521 are gaps in 360T's numbering — not members.
+        assert 9519 not in group.member_tags
+        assert 9521 not in group.member_tags
+
+    def test_360t_ti_security_alt_id_group_defined(self) -> None:
+        group = get_group_definition(454)
+        assert group is not None
+        assert 455 in group.member_tags  # SecurityAltID
+        assert 456 in group.member_tags  # SecurityAltIDSource
+
+    def test_360t_ti_trd_reg_publications_group_defined(self) -> None:
+        group = get_group_definition(2668)
+        assert group is not None
+        assert 2669 in group.member_tags  # TrdRegPublicationType
+        assert 2670 in group.member_tags  # TrdRegPublicationReason
+
+    def test_360t_ti_reference_prices_group_defined(self) -> None:
+        group = get_group_definition(9780)
+        assert group is not None
+        assert 9781 in group.member_tags  # RefPriceSource
+        assert 9792 in group.member_tags  # RefPriceBidSwapPoints
+
     def test_legs_group_includes_leg_allocs(self) -> None:
         group = get_group_definition(555)
         assert group is not None

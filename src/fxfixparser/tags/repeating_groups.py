@@ -84,6 +84,9 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             # on them — loses nested structure but keeps the count correct.
             523,  # PartySubID
             803,  # PartySubIDType
+            # 360T TI carries the MiFID2 party role qualifier inside party
+            # entries (e.g. Investment Decision Maker / Executing Trader).
+            2376,  # PartyRoleQualifier
         },
     ),
     # Sides (Trade Capture Report side-level details)
@@ -377,6 +380,72 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             1905,  # RegulatoryTradeIDSource
             1906,  # RegulatoryTradeIDType
             2411,  # RegulatoryLegRefID
+        },
+    ),
+    # Security alternate IDs (360T TI per-leg ISINs / contract codes)
+    RepeatingGroupDefinition(
+        count_tag=454,  # NoSecurityAltID
+        name="Security Alt IDs",
+        member_tags={
+            455,  # SecurityAltID
+            456,  # SecurityAltIDSource
+        },
+    ),
+    # Regulatory publications — waivers / deferrals (MiFID2; 360T TI)
+    RepeatingGroupDefinition(
+        count_tag=2668,  # NoTrdRegPublications
+        name="Regulatory Publications",
+        member_tags={
+            2669,  # TrdRegPublicationType
+            2670,  # TrdRegPublicationReason
+        },
+    ),
+    # Competing dealer quotes (360T TI ExecutionReport). 9519 and 9521 are gaps
+    # in 360T's numbering — excluded so they are never treated as members.
+    RepeatingGroupDefinition(
+        count_tag=9516,  # NoCompetingQuotes
+        name="Competing Quotes",
+        member_tags=set(range(9517, 9544)) - {9519, 9521},  # 9517–9543
+    ),
+    # Payment schedule (360T TI commodity Asian swaps / energy Asian options)
+    RepeatingGroupDefinition(
+        count_tag=7560,  # NoPaymentSchedule
+        name="Payment Schedule",
+        member_tags={
+            7561,  # PaymentScheduleYearMonth
+            7562,  # PaymentScheduleAmount
+        },
+    ),
+    # Negotiation external IDs (360T TI)
+    RepeatingGroupDefinition(
+        count_tag=9580,  # NoNegotiationExternalIds
+        name="Negotiation External IDs",
+        member_tags={
+            9581,  # NegotiationExternalId
+        },
+    ),
+    # Trade-intention product-id mappings (360T TI)
+    RepeatingGroupDefinition(
+        count_tag=9590,  # NoTIProductIds
+        name="TI Product IDs",
+        member_tags={
+            9591,  # TIProductId
+            9592,  # TIExternalId
+        },
+    ),
+    # Reference prices (360T TI EMS workflow snapshots)
+    RepeatingGroupDefinition(
+        count_tag=9780,  # NoRefprices
+        name="Reference Prices",
+        member_tags=set(range(9781, 9793)),  # 9781–9792
+    ),
+    # Reference IDs (360T TI)
+    RepeatingGroupDefinition(
+        count_tag=9800,  # NoReferenceIDs
+        name="Reference IDs",
+        member_tags={
+            9801,  # ReferenceIDType
+            9802,  # ReferenceIDValue
         },
     ),
 ]

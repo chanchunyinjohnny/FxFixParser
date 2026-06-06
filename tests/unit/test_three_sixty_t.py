@@ -26,10 +26,12 @@ def _parse(raw: str):
 class TestThreeSixtyTHandlerProperties:
     def test_name_and_senders(self) -> None:
         handler = ThreeSixtyTHandler()
-        assert handler.name == "360T"
+        assert handler.name == "360T RFS"
+        # "360T" stays a sender alias so explicit venue="360T" still resolves.
         assert "360T" in handler.sender_comp_ids
         assert handler.matches_sender("360TGTX")
         assert not handler.matches_sender("FXGO")
+        assert not handler.matches_sender("360T_TI")  # that is the TI handler
 
 
 class TestThreeSixtyTCustomTags:

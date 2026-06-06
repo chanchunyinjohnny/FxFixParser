@@ -8,6 +8,7 @@ from fxfixparser.venues.lseg_fx_matching import LSEGFXMatchingHandler
 from fxfixparser.venues.sgx_titan_otc import SGXTitanOTCHandler
 from fxfixparser.venues.smart_trade import SmartTradeHandler
 from fxfixparser.venues.three_sixty_t import ThreeSixtyTHandler
+from fxfixparser.venues.three_sixty_t_ti import ThreeSixtyTTIHandler
 
 # FIX tags inspected, in priority order, when auto-detecting a venue from a
 # parsed message: SenderCompID, TargetCompID, OnBehalfOfCompID. Checking the
@@ -71,6 +72,7 @@ class VenueRegistry:
         registry.register(FXGOHandler())
         registry.register(BloombergDORHandler())
         registry.register(ThreeSixtyTHandler())
+        registry.register(ThreeSixtyTTIHandler())
         registry.register(SGXTitanOTCHandler())
         registry.register(LSEGFXMatchingHandler())
         return registry

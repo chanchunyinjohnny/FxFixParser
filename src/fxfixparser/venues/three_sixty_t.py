@@ -2,6 +2,8 @@
 
 Supports the 360 Treasury Systems (Deutsche Boerse) RFS Market Taker FIX API
 (v12.6) for FX Spot, Forward, Swap, NDF, NDS, FX Time Options and Block trades.
+The venue is named "360T RFS"; its post-trade sibling is "360T TI"
+(``three_sixty_t_ti.py``), mirroring the Bloomberg FXGO / DOR pair.
 
 360T runs FIX 4.4 with no ApplVerID, so the FIX 5.0 spec is not auto-loaded;
 every non-FIX44 tag 360T uses is defined here in ``custom_tags``. 360T also:
@@ -196,7 +198,7 @@ class ThreeSixtyTHandler(VenueHandler):
 
     @property
     def name(self) -> str:
-        return "360T"
+        return "360T RFS"
 
     @property
     def sender_comp_ids(self) -> list[str]:

@@ -134,7 +134,8 @@ src/fxfixparser/
 │   ├── registry.py        # Venue registry and auto-detection
 │   ├── smart_trade.py     # LiquidityFX (123 custom tags)
 │   ├── fxgo.py            # Bloomberg FXGO
-│   ├── three_sixty_t.py   # 360T
+│   ├── three_sixty_t.py   # 360T RFS (Market Taker)
+│   ├── three_sixty_t_ti.py # 360T TI (TradeImporter)
 │   └── bloomberg_dor.py   # Bloomberg DOR (47 custom tags)
 ├── tags/                  # Tag dictionaries
 │   ├── dictionary.py      # TagDictionary manager
@@ -177,12 +178,16 @@ Products are checked in order of specificity (most specific first):
 | Smart Trade | `SMARTTRADE`, `SMTRADE`, `ST`, `LFX_CORE`, `LFX`, `UAT.ATP.RFS.MKT` |
 | Bloomberg FXGO | `FXGO`, `BLOOMBERG`, `BBG`, `BFXGO` |
 | Bloomberg DOR | `BLOOMBERG_DOR`, `BBGDOR`, `DOR`, `FXOM`, `ORP` |
-| 360T | `360T`, `THREESIXTYT`, `360TGTX` |
+| 360T RFS | `360T`, `THREESIXTYT`, `360TGTX` |
+| 360T TI | `360T_TI` |
 
-> Detection is two-pass: Bloomberg DOR first claims any message carrying a
+> Detection is two-pass. **Bloomberg DOR** first claims any message carrying a
 > Bloomberg CompID **and** an ORP/DOR protocol marker (FIXT 1.1 BeginString,
 > ApplVerID 1128, a `DOR`/`FXOM`/`ORP` routing CompID on tag 115/128, or msg
-> type AI/AG); otherwise the CompID table above applies.
+> type AI/AG). **360T TI** likewise claims any ExecutionReport (35=8) carrying a
+> TI marker — a `360T_TI` CompID, a TI ProductType value (FX-SPOT/FX-FWD/…), or a
+> NoCompetingQuotes (9516) group — so it is never mistaken for the RFS Market
+> Taker. Otherwise the CompID table above applies.
 
 ## Common FIX Tags Reference
 
