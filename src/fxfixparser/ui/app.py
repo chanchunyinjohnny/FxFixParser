@@ -456,8 +456,28 @@ def main() -> None:
                 st.subheader("JSON Output")
                 st.json(message.to_dict())
 
-            # Trade summary
-            if venue_handler:
+            # Trade / Quote summary — only rendered for economic messages.
+            # Administrative messages (SecurityDefinition 35=d,
+            # SecurityDefinitionRequest 35=c, QuoteCancel 35=Z, QuoteRequestReject
+            # 35=AG, News, BusinessMessageReject) carry no product_type; a trade
+            # panel for them is a wall of N/A that reads as a parse failure, so we
+            # surface a short note instead. This gate is venue-universal: across
+            # every supported venue product_type is set for economic messages
+            # (quotes / RFQs / executions / trade captures) and is None only for
+            # these non-economic types.
+            if venue_handler and message.product_type is None:
+                st.divider()
+                msg_type_field = message.get_field(35)
+                type_label = (
+                    msg_type_field.value_description
+                    if msg_type_field and msg_type_field.value_description
+                    else f"MsgType {message.msg_type}"
+                )
+                st.info(
+                    f"**{type_label}** is a non-economic message — no trade "
+                    "summary. See the parsed tags above for its contents."
+                )
+            elif venue_handler:
                 st.divider()
                 trade = venue_handler.extract_trade(message)
 

@@ -5,6 +5,7 @@ from typing import Mapping
 from fxfixparser.core.field import FixField
 from fxfixparser.core.message import FixMessage, ParsedTrade
 from fxfixparser.core.parser import FixParser, ParserConfig
+from fxfixparser.products.base import ProductRegistry
 from fxfixparser.venues.bloomberg_dor import BloombergDORHandler
 from fxfixparser.venues.fxgo import FXGOHandler
 from fxfixparser.venues.registry import VenueRegistry
@@ -368,6 +369,85 @@ class TestBloombergDORClaimsMessage:
         handler = BloombergDORHandler()
         msg = self._msg({8: "FIX.4.4", 35: "8", 49: "FXGO", 56: "CLIENT"})
         assert handler.claims_message(msg) is False
+
+
+class TestTradeSummaryGate:
+    """The UI renders a trade / quote summary only when ``product_type`` is set;
+    administrative messages get a short note instead of a wall of N/A.
+
+    These tests pin the invariant that makes that gate safe and venue-universal:
+    across every venue, ``product_type`` is present for economic messages
+    (quotes / RFQs / executions / trade captures) and absent only for the known
+    administrative message types. So the UI never hides a real trade summary and
+    never shows trade metrics for a non-economic message.
+    """
+
+    # Fixtures the UI is expected to suppress (administrative / non-economic).
+    ADMIN_FIXTURES = frozenset(
+        {
+            "BLOOMBERG_DOR_SPOT_RFQ_REJECT",  # 35=AG QuoteRequestReject
+            "THREE_SIXTY_T_QUOTE_CANCEL",  # 35=Z QuoteCancel
+            "THREE_SIXTY_T_SECURITY_DEFINITION",  # 35=d SecurityDefinition
+        }
+    )
+
+    # Module constants that are not parseable venue messages.
+    _NON_MESSAGES = frozenset(
+        {
+            "SOH",
+            "SIMPLE_MESSAGE",
+            "INVALID_NO_BEGIN_STRING",
+            "INVALID_NO_CHECKSUM",
+            "INVALID_WRONG_ORDER",
+        }
+    )
+
+    def _resolved(self, venue_registry: VenueRegistry) -> dict[str, FixMessage]:
+        """Parse every venue fixture the way the UI does (auto-detect venue +
+        product-registry fallback) and return ``{name: message}`` for those that
+        resolve to a venue handler."""
+        import tests.fixtures.sample_messages as samples
+
+        parser = FixParser(config=ParserConfig(strict_checksum=False, strict_body_length=False))
+        product_registry = ProductRegistry.default()
+        resolved: dict[str, FixMessage] = {}
+        for name in dir(samples):
+            if not name.isupper() or name in self._NON_MESSAGES:
+                continue
+            raw = getattr(samples, name)
+            if not isinstance(raw, str):
+                continue
+            message = parser.parse(raw, auto_detect_venue=True)
+            handler = venue_registry.get(message.venue) if message.venue else None
+            if handler is None:
+                continue
+            product_handler = product_registry.detect(message)
+            if product_handler and not message.product_type:
+                message.product_type = product_handler.product_type
+            resolved[name] = message
+        return resolved
+
+    def test_admin_fixtures_are_suppressed(self, venue_registry: VenueRegistry) -> None:
+        """Known administrative messages resolve to a venue but carry no
+        product_type, so the UI shows the note rather than a trade summary."""
+        resolved = self._resolved(venue_registry)
+        for name in self.ADMIN_FIXTURES:
+            assert name in resolved, f"{name} did not resolve to a venue"
+            assert resolved[name].product_type is None, (
+                f"{name} unexpectedly has product_type " f"{resolved[name].product_type!r}"
+            )
+
+    def test_economic_fixtures_keep_their_summary(self, venue_registry: VenueRegistry) -> None:
+        """Every other venue-resolved fixture has a product_type, so the UI gate
+        never wrongly hides an economic message's trade / quote summary."""
+        resolved = self._resolved(venue_registry)
+        economic = {n: m for n, m in resolved.items() if n not in self.ADMIN_FIXTURES}
+        assert economic, "expected at least one economic fixture to resolve"
+        for name, message in economic.items():
+            assert message.product_type is not None, (
+                f"{name} (35={message.msg_type}) has no product_type; the UI "
+                "would wrongly suppress its trade summary as non-economic"
+            )
 
 
 class TestSymbolFallback:
