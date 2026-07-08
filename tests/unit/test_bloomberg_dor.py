@@ -8,10 +8,12 @@ from tests.fixtures.sample_messages import (
     BLOOMBERG_DOR_ALGO_EXEC,
     BLOOMBERG_DOR_FORWARD_EXEC,
     BLOOMBERG_DOR_SPOT_EXEC,
+    BLOOMBERG_DOR_SPOT_EXEC_FULL,
     BLOOMBERG_DOR_SPOT_QUOTE,
     BLOOMBERG_DOR_SPOT_RFQ,
     BLOOMBERG_DOR_SPOT_RFQ_REJECT,
     BLOOMBERG_DOR_SWAP_EXEC,
+    BLOOMBERG_DOR_SWAP_EXEC_FULL,
     BLOOMBERG_DOR_SWAP_QUOTE_RESPONSE,
     BLOOMBERG_DOR_SWAP_QUOTE_STATUS,
     BLOOMBERG_DOR_SWAP_QUOTE_STATUS_PASS,
@@ -469,3 +471,139 @@ class TestBloombergDORQuoteStatusPass:
         for leg in (leg1, leg2):
             product = next(f for f in leg.fields if f.tag == 607)
             assert product.value_description == "CURRENCY"
+
+
+class TestBloombergDORSpotExecFull:
+    """Regression coverage for the full ORP spot execution report.
+
+    A real DOR spot fill carries 195=0 (zero forward points), the Ccy1/Ccy2
+    market-type tags (22159/22160), and a NoRegulatoryTradeIDs (1907) entry
+    that includes 1904 RegulatoryTradeIDEvent.
+    """
+
+    @pytest.fixture
+    def parser(self):
+        return FixParser(config=ParserConfig(strict_checksum=False))
+
+    def _group(self, message, count_tag: int):
+        for sf in message.get_structured_fields():
+            if sf.is_group and sf.group is not None and sf.group.count_field.tag == count_tag:
+                return sf.group
+        return None
+
+    def test_ccy_market_type_tags_resolve(self, parser):
+        """22159/22160 must resolve to Ccy1MarketType/Ccy2MarketType and
+        decode value R per the ORP spec."""
+        message = parser.parse(BLOOMBERG_DOR_SPOT_EXEC_FULL, auto_detect_venue=True)
+
+        ccy1 = message.get_field(22159)
+        ccy2 = message.get_field(22160)
+        assert ccy1 is not None and ccy1.name == "Ccy1MarketType"
+        assert ccy2 is not None and ccy2.name == "Ccy2MarketType"
+        assert ccy1.value_description == "Regular / offshore"
+        assert ccy2.value_description == "Regular / offshore"
+
+    def test_no_unknown_tags(self, parser):
+        """Every tag in the full spot exec must have a definition."""
+        message = parser.parse(BLOOMBERG_DOR_SPOT_EXEC_FULL, auto_detect_venue=True)
+        unknown = sorted({f.tag for f in message.fields if f.definition is None})
+        assert unknown == [], f"Unexpected unknown tags: {unknown}"
+
+    def test_regulatory_trade_id_entry_complete(self, parser):
+        """The single 1907 entry must span all four fields — 1904
+        RegulatoryTradeIDEvent must not terminate the group walker."""
+        message = parser.parse(BLOOMBERG_DOR_SPOT_EXEC_FULL, venue="Bloomberg DOR")
+        group = self._group(message, 1907)
+        assert group is not None, "Regulatory Trade IDs group not detected"
+        assert group.count == 1
+        assert len(group.entries) == 1
+        tags = {f.tag for f in group.entries[0].fields}
+        assert tags == {1903, 1905, 1904, 1906}
+
+
+class TestBloombergDORSwapExecFull:
+    """Regression coverage for the full ORP swap execution report.
+
+    Both legs carry executed-leg tags (1073 LegLastForwardPoints, 1074
+    LegCalculatedCcyLastQty, 1418 LegLastQty) and the message has three
+    NoRegulatoryTradeIDs entries (package UTI + per-leg UTIs via 2411).
+    """
+
+    @pytest.fixture
+    def handler(self):
+        return BloombergDORHandler()
+
+    @pytest.fixture
+    def parser(self):
+        return FixParser(config=ParserConfig(strict_checksum=False))
+
+    def _group(self, message, count_tag: int):
+        for sf in message.get_structured_fields():
+            if sf.is_group and sf.group is not None and sf.group.count_field.tag == count_tag:
+                return sf.group
+        return None
+
+    def test_legs_group_parses_both_entries(self, parser):
+        """555=2 with 1073/1074/1418 inside each leg must yield two complete
+        entries — 1073 must not terminate the walker mid-leg."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_EXEC_FULL, venue="Bloomberg DOR")
+        legs = self._group(message, 555)
+        assert legs is not None, "Legs group not detected"
+        assert legs.count == 2
+        assert len(legs.entries) == 2, (
+            f"Leg count mismatch: declared {legs.count}, got "
+            f"{len(legs.entries)} entries — 1073 LegLastForwardPoints likely "
+            f"terminating the walker."
+        )
+        near, far = legs.entries
+        for entry in (near, far):
+            tags = {f.tag for f in entry.fields}
+            assert {600, 609, 624, 556, 685, 587, 588, 637, 1073, 1074, 1418} <= tags
+
+    def test_regulatory_trade_ids_group_parses_all_entries(self, parser):
+        """1907=3 must yield three entries; the second and third carry the
+        2411 RegulatoryLegRefID leg reference."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_EXEC_FULL, venue="Bloomberg DOR")
+        group = self._group(message, 1907)
+        assert group is not None, "Regulatory Trade IDs group not detected"
+        assert group.count == 3
+        assert len(group.entries) == 3
+
+        entry_tags = [{f.tag for f in e.fields} for e in group.entries]
+        assert entry_tags[0] == {1903, 1905, 1904, 1906}
+        assert entry_tags[1] == {1903, 1905, 1904, 1906, 2411}
+        assert entry_tags[2] == {1903, 1905, 1904, 1906, 2411}
+
+    def test_regulatory_trade_id_event_decodes(self, parser):
+        """1904=0 decodes to the spec description (initial block trade)."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_EXEC_FULL, venue="Bloomberg DOR")
+        event = message.get_field(1904)
+        assert event is not None
+        assert event.name == "RegulatoryTradeIDEvent"
+        assert event.value_description == "Initial block trade"
+
+    def test_no_unknown_tags(self, parser):
+        """Every tag in the full swap exec must have a definition."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_EXEC_FULL, auto_detect_venue=True)
+        unknown = sorted({f.tag for f in message.fields if f.definition is None})
+        assert unknown == [], f"Unexpected unknown tags: {unknown}"
+
+    def test_extract_trade_populates_both_legs(self, handler, parser):
+        """extract_trade must surface both legs: dates, prices, quantities
+        (from 1418 LegLastQty / 685 LegOrderQty), actions, and swap points."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_EXEC_FULL, venue=handler)
+        trade = handler.extract_trade(message)
+
+        assert trade.is_swap is True
+        assert trade.symbol == "EUR/USD"
+        assert trade.settlement_date == "20260709"
+        assert trade.far_settlement_date == "20260810"
+        assert trade.near_leg_price == pytest.approx(1.14418)
+        assert trade.far_leg_price == pytest.approx(1.145681)
+        assert trade.near_quantity == pytest.approx(1000000.0)
+        assert trade.far_quantity == pytest.approx(1000000.0)
+        assert trade.swap_points == pytest.approx(0.001501)
+        # Explicit per-leg sides: near 624=2 (Sell EUR), far 624=1 (Buy EUR)
+        assert trade.near_leg_action == "Sell EUR"
+        assert trade.far_leg_action == "Buy EUR"
+        assert trade.swap_side_source == "legs"

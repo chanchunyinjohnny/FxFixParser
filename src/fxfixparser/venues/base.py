@@ -208,8 +208,11 @@ class VenueHandler(ABC):
             trade.far_settlement_date = far.get("588")
             trade.near_leg_price = _to_float(near.get("637") or near.get("566"))
             trade.far_leg_price = _to_float(far.get("637") or far.get("566"))
-            trade.near_quantity = _to_float(near.get("687"))
-            trade.far_quantity = _to_float(far.get("687"))
+            # Leg quantity: 687 LegQty (FIX 4.4), then 685 LegOrderQty
+            # (FIX 5.0+), then 1418 LegLastQty (executed amount) — Bloomberg
+            # DOR executions carry 685/1418 but never 687.
+            trade.near_quantity = _to_float(near.get("687") or near.get("685") or near.get("1418"))
+            trade.far_quantity = _to_float(far.get("687") or far.get("685") or far.get("1418"))
             # If the legs carry explicit sides, use them directly so we
             # don't need to derive from the parent Side tag.
             leg_near_action = _leg_action(near, base, term)

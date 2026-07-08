@@ -191,13 +191,21 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             687,  # LegQty
             1788,  # LegID (FIX 5.0+; used by Bloomberg DOR swap legs)
             # FIX 5.0+ leg-level price/forward-point fields seen in
-            # Bloomberg DOR swap RFQs, quotes, and status reports.
+            # Bloomberg DOR swap RFQs, quotes, status and execution reports.
             607,  # LegProduct
+            675,  # LegSettlCurrency
             1067,  # LegBidForwardPoints
             1068,  # LegOfferForwardPoints
+            1073,  # LegLastForwardPoints (executed swap legs)
             2346,  # LegMidPx
             1074,  # LegCalculatedCcyLastQty (standard)
             1418,  # LegCalculatedCcyLastQty (LSEG variant; standard LegLastQty)
+            1893,  # LegExecID (per-leg execution ID)
+            # Bloomberg DOR leg-scoped custom tags (defined in the venue
+            # overlay); must be members so they don't terminate the walker.
+            22010,  # LegTenor
+            22041,  # LegDV01
+            22263,  # LegCalculatedCurrency
             # 360T leg-level allocation (flattened nested NoLegAllocs) + leg mid.
             # 360T accepts only one allocation per leg, so 671/673 never repeat
             # within a leg and the flattening does not phantom-split entries.
@@ -371,13 +379,14 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             542,  # UnderlyingMaturityDate (value date)
         },
     ),
-    # Regulatory trade IDs (FIX 5.0 SP2; 360T ExecutionReport)
+    # Regulatory trade IDs (FIX 5.0 SP2; 360T / Bloomberg DOR ExecutionReport)
     RepeatingGroupDefinition(
         count_tag=1907,  # NoRegulatoryTradeIDs
         name="Regulatory Trade IDs",
         member_tags={
             1903,  # RegulatoryTradeID
             1905,  # RegulatoryTradeIDSource
+            1904,  # RegulatoryTradeIDEvent
             1906,  # RegulatoryTradeIDType
             2411,  # RegulatoryLegRefID
         },

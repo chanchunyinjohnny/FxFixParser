@@ -109,6 +109,12 @@ FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
         "Offer forward points for an individual leg of an FX Swap quote.",
     ),
     FixFieldDefinition(
+        1073,
+        "LegLastForwardPoints",
+        "PRICEOFFSET",
+        "Executed forward points for an individual leg of a multi-leg trade.",
+    ),
+    FixFieldDefinition(
         2346,
         "LegMidPx",
         "PRICE",
@@ -150,6 +156,26 @@ FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
         "LegLastQty",
         "QTY",
         "Quantity bought/sold for this leg of a multi-leg trade.",
+    ),
+    FixFieldDefinition(
+        1893,
+        "LegExecID",
+        "STRING",
+        "Execution identifier for an individual leg of a multi-leg trade.",
+    ),
+    FixFieldDefinition(
+        1904,
+        "RegulatoryTradeIDEvent",
+        "INT",
+        "Event that caused the regulatory trade ID to be created/updated.",
+        valid_values={
+            "0": "Initial block trade",
+            "1": "Allocation",
+            "2": "Clearing",
+            "3": "Compression",
+            "4": "Novation",
+            "5": "Termination",
+        },
     ),
     FixFieldDefinition(
         958,

@@ -31,6 +31,30 @@ FORWARD_TENOR_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# SecurityType (167) values that explicitly identify a non-forward product.
+# When one of these is present, the message is that product by definition
+# and forward heuristics (settle type, tenor, forward points) must not
+# reclassify it.
+NON_FORWARD_SECURITY_TYPES = {
+    "FXSPOT",
+    "FXSWAP",
+    "FXNDF",
+    "FXNDS",
+    "FXNDO",
+    "FUT",
+    "OPT",
+}
+
+
+def _is_nonzero_number(value: str | None) -> bool:
+    """True when the value parses as a number and is not exactly zero."""
+    if not value:
+        return False
+    try:
+        return float(value) != 0.0
+    except ValueError:
+        return False
+
 
 class ForwardHandler(ProductHandler):
     """Handler for FX Forward trades."""
@@ -47,12 +71,20 @@ class ForwardHandler(ProductHandler):
         - SettlType (63) = 6 (Future) or B (BrokenDate)
         - SettlType (63) is a forward tenor code (e.g. M1, W2, Y1)
         - Tenor (6215) is a forward tenor code (Bloomberg DOR, e.g. 1M, 3M)
-        - Presence of forward points (tag 195 LastForwardPoints)
-        - Presence of MD entry forward points (tag 1027 MDEntryForwardPoints)
+        - Non-zero forward points (tag 195 LastForwardPoints)
+        - Non-zero MD entry forward points (tag 1027 MDEntryForwardPoints)
+
+        An explicit SecurityType (167) naming another product (e.g. FXSPOT,
+        FXSWAP) is authoritative and vetoes all heuristics — venues like
+        Bloomberg DOR send 195=0 on spot fills, which must stay Spot.
         """
         security_type = message.get_value(167)
-        if security_type and security_type.upper() == "FXFWD":
-            return True
+        if security_type:
+            st = security_type.upper()
+            if st == "FXFWD":
+                return True
+            if st in NON_FORWARD_SECURITY_TYPES:
+                return False
 
         settl_type = message.get_value(63)
         if settl_type in ("6", "B"):
@@ -69,12 +101,13 @@ class ForwardHandler(ProductHandler):
         if tenor and tenor.strip().upper() not in SPOT_SETTL_TYPES:
             return True
 
-        # Check for forward points (execution reports / quotes)
-        if message.get_value(195):
+        # Check for forward points (execution reports / quotes). Zero
+        # forward points means the trade prices at spot — not a forward.
+        if _is_nonzero_number(message.get_value(195)):
             return True
 
         # Check for MD entry forward points (market data messages)
-        if message.get_value(1027):
+        if _is_nonzero_number(message.get_value(1027)):
             return True
 
         return False

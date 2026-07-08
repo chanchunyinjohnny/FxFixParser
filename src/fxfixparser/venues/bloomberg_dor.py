@@ -179,6 +179,28 @@ _BLOOMBERG_CUSTOM_TAGS: dict[int, FixFieldDefinition] = {
         description="Offshore indicator.",
         valid_values={"0": "Regular", "1": "Offshore", "2": "Onshore"},
     ),
+    22159: FixFieldDefinition(
+        tag=22159,
+        name="Ccy1MarketType",
+        field_type="CHAR",
+        description="Market/deliverability type of currency 1 of the pair.",
+        valid_values={
+            "N": "Non-deliverable",
+            "O": "Onshore",
+            "R": "Regular / offshore",
+        },
+    ),
+    22160: FixFieldDefinition(
+        tag=22160,
+        name="Ccy2MarketType",
+        field_type="CHAR",
+        description="Market/deliverability type of currency 2 of the pair.",
+        valid_values={
+            "N": "Non-deliverable",
+            "O": "Onshore",
+            "R": "Regular / offshore",
+        },
+    ),
     1300: FixFieldDefinition(
         tag=1300,
         name="MarketSegmentID",

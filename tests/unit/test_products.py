@@ -13,6 +13,7 @@ from fxfixparser.products.ndf import NDFHandler
 from fxfixparser.products.spot import SpotHandler
 from fxfixparser.products.swap import SwapHandler
 from tests.fixtures.sample_messages import (
+    BLOOMBERG_DOR_SPOT_EXEC_FULL,
     FORWARD_MESSAGE,
     LFX_FORWARD_MD_MESSAGE,
     NDF_MESSAGE,
@@ -165,6 +166,52 @@ class TestProductDetection:
         handler = product_registry.detect(msg)
         assert handler is not None
         assert handler.product_type == "Forward"
+
+    def test_explicit_fxspot_with_zero_forward_points_is_spot(
+        self, parser: FixParser, product_registry: ProductRegistry
+    ) -> None:
+        """167=FXSPOT with 195=0 is Spot — zero forward points is not a forward.
+
+        Bloomberg DOR spot fills carry LastForwardPoints (195) with the
+        literal value 0. Presence of the tag must not override the explicit
+        SecurityType (167) = FXSPOT.
+        """
+        message = parser.parse(BLOOMBERG_DOR_SPOT_EXEC_FULL)
+        handler = product_registry.detect(message)
+
+        assert handler is not None
+        assert handler.product_type == "Spot"
+
+    def test_forward_handler_ignores_zero_forward_points(self, parser: FixParser) -> None:
+        """ForwardHandler does not claim a message on 195=0 alone."""
+        handler = ForwardHandler()
+        msg = parser.parse(
+            "8=FIX.4.4|9=150|35=8|49=SENDER|56=CLIENT|34=1|"
+            "52=20240115-10:30:00|55=EUR/USD|54=1|32=1000000|31=1.08500|"
+            "194=1.08500|195=0|64=20240117|10=000|"
+        )
+        assert not handler.detect(msg)
+
+    def test_forward_handler_detects_nonzero_forward_points(self, parser: FixParser) -> None:
+        """ForwardHandler still claims messages carrying non-zero 195."""
+        handler = ForwardHandler()
+        msg = parser.parse(
+            "8=FIX.4.4|9=150|35=8|49=SENDER|56=CLIENT|34=1|"
+            "52=20240115-10:30:00|55=EUR/USD|54=1|32=1000000|31=1.09000|"
+            "194=1.08500|195=0.0050|64=20240415|10=000|"
+        )
+        assert handler.detect(msg)
+
+    def test_forward_handler_defers_to_explicit_security_type(self, parser: FixParser) -> None:
+        """An explicit non-forward SecurityType (167) vetoes forward heuristics."""
+        handler = ForwardHandler()
+        # 167=FXSPOT wins even when forward-shaped tags are present.
+        msg = parser.parse(
+            "8=FIX.4.4|9=150|35=8|49=SENDER|56=CLIENT|34=1|"
+            "52=20240115-10:30:00|55=EUR/USD|167=FXSPOT|54=1|"
+            "195=0.0050|64=20240117|10=000|"
+        )
+        assert not handler.detect(msg)
 
     def test_extract_forward_details(self, parser: FixParser) -> None:
         """Test extracting forward-specific details."""
