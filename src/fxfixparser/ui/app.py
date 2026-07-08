@@ -5,6 +5,7 @@ from typing import Any
 import streamlit as st
 
 from fxfixparser.core.exceptions import ChecksumError, ParseError, ValidationError
+from fxfixparser.core.fx_math import pip_size
 from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.products.base import ProductRegistry
 from fxfixparser.venues.registry import VenueRegistry
@@ -252,15 +253,25 @@ def _render_swap_trade_summary(trade: Any, message: Any) -> None:
             px_fmt.format(trade.spot_rate) if trade.spot_rate is not None else "N/A",
         )
     with pricing_cols[1]:
-        pts_value = pts_fmt.format(trade.swap_points) if trade.swap_points is not None else "N/A"
-        pts_delta = (
-            f"{pips_fmt.format(trade.swap_points_pips)} pips"
-            if trade.swap_points_pips is not None
-            else None
-        )
-        # ``delta_color="off"`` keeps the pips line neutral grey rather
-        # than colouring positive points green / negative red — swap
-        # points have no intrinsic good/bad direction.
+        # FX convention quotes swap points in pips (e.g. +15.01), so pips
+        # lead; the raw far-minus-near rate differential goes on the
+        # secondary line. Falls back to rate terms when the pip size is
+        # unknown for the symbol.
+        if trade.swap_points_pips is not None:
+            pts_value = f"{pips_fmt.format(trade.swap_points_pips)} pips"
+            pts_delta = (
+                f"{pts_fmt.format(trade.swap_points)} rate terms"
+                if trade.swap_points is not None
+                else None
+            )
+        else:
+            pts_value = (
+                pts_fmt.format(trade.swap_points) if trade.swap_points is not None else "N/A"
+            )
+            pts_delta = None
+        # ``delta_color="off"`` keeps the secondary line neutral grey
+        # rather than colouring positive points green / negative red —
+        # swap points have no intrinsic good/bad direction.
         st.metric("Swap Points", pts_value, delta=pts_delta, delta_color="off")
     with pricing_cols[2]:
         st.metric("Product", message.product_type or "N/A")
@@ -573,17 +584,32 @@ def main() -> None:
                         st.dataframe(far_data, use_container_width=True, hide_index=True)
 
                         st.markdown("##### Swap Points")
-                        swap_data = {
-                            "": ["Bid", "Offer"],
-                            "Swap Points": [
-                                f"{trade.bid_swap_points:+.6f}"
-                                if trade.bid_swap_points is not None
-                                else "N/A",
-                                f"{trade.offer_swap_points:+.6f}"
-                                if trade.offer_swap_points is not None
-                                else "N/A",
-                            ],
-                        }
+                        # FX convention quotes swap points in pips; keep the
+                        # raw rate differential alongside. Falls back to rate
+                        # terms only when the pip size is unknown.
+                        ps = pip_size(trade.symbol)
+                        bid_pts = trade.bid_swap_points
+                        offer_pts = trade.offer_swap_points
+                        if ps:
+                            swap_data = {
+                                "": ["Bid", "Offer"],
+                                "Swap Points (pips)": [
+                                    f"{bid_pts / ps:+.2f}" if bid_pts is not None else "N/A",
+                                    f"{offer_pts / ps:+.2f}" if offer_pts is not None else "N/A",
+                                ],
+                                "Rate Terms": [
+                                    f"{bid_pts:+.6f}" if bid_pts is not None else "N/A",
+                                    f"{offer_pts:+.6f}" if offer_pts is not None else "N/A",
+                                ],
+                            }
+                        else:
+                            swap_data = {
+                                "": ["Bid", "Offer"],
+                                "Swap Points": [
+                                    f"{bid_pts:+.6f}" if bid_pts is not None else "N/A",
+                                    f"{offer_pts:+.6f}" if offer_pts is not None else "N/A",
+                                ],
+                            }
                         st.dataframe(swap_data, use_container_width=True, hide_index=True)
 
                     else:
