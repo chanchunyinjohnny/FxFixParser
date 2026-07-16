@@ -80,6 +80,9 @@ class FixMessage:
     venue: str | None = None
     product_type: str | None = None
     venue_extras: dict[str, str] = field(default_factory=dict)
+    # True when the input was a pretty-printed parsed report that was
+    # reconstructed into a raw stream (see core/report_format.py).
+    converted_from_report: bool = False
 
     def get_field(self, tag: int) -> FixField | None:
         """Get the first field with the given tag number."""
@@ -257,6 +260,7 @@ class FixMessage:
             "venue": self.venue,
             "product_type": self.product_type,
             "venue_extras": self.venue_extras,
+            "converted_from_report": self.converted_from_report,
         }
 
         if structured:

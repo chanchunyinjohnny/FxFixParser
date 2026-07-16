@@ -12,6 +12,8 @@ from tests.fixtures.sample_messages import (
     FORWARD_MESSAGE,
     LSEG_FXM_SWAP_EXECUTION,
     NDF_MESSAGE,
+    PARSED_REPORT_DOR_SWAP_EXEC,
+    RAW_EQUIVALENT_PARSED_REPORT_DOR_SWAP_EXEC,
     SGX_TITAN_OTC_KU_TRADE_CAPTURE,
     SGX_TITAN_OTC_KUTM_FLEXC_TRADE_CAPTURE,
     SGX_TITAN_OTC_UC_EXEC_REPORT,
@@ -348,3 +350,57 @@ def test_all_360t_ti_samples_parse() -> None:
         message = parser.parse(raw, auto_detect_venue=True)
         assert message.venue == "360T TI"
         assert message.msg_type == "8"
+
+
+class TestParsedReportEndToEnd:
+    """A parsed-report paste must behave exactly like the raw message."""
+
+    def _parse(self):
+        return FixParser().parse(PARSED_REPORT_DOR_SWAP_EXEC, auto_detect_venue=True)
+
+    def test_full_pipeline_venue_and_fields(self) -> None:
+        message = self._parse()
+        assert message.converted_from_report is True
+        assert message.venue == "Bloomberg DOR"
+        assert message.begin_string == "FIXT.1.1"
+        assert message.msg_type == "8"
+        assert message.get_value(167) == "FXSWAP"
+        assert message.get_value(1071) == "-0.000008"
+        assert message.get_value(55) == "GBP/USD"
+
+    def test_product_detected_as_swap(self) -> None:
+        message = self._parse()
+        product = ProductRegistry.default().detect(message)
+        assert product is not None
+        assert product.product_type == "Swap"
+
+    def test_repeating_groups_structured(self) -> None:
+        message = self._parse()
+        groups = {
+            sf.group.count_field.tag: sf.group
+            for sf in message.get_structured_fields()
+            if sf.is_group
+        }
+        assert len(groups[453].entries) == 3
+        assert len(groups[555].entries) == 2
+        assert len(groups[1907].entries) == 3
+        # Nested LEI sub-IDs are carried inside the party entries
+        # (flattened by design — see repeating_groups.py).
+        first_party_tags = {f.tag for f in groups[453].entries[0].fields}
+        assert {447, 448, 452, 802, 523, 803} <= first_party_tags
+        # Leg fields resolve to definitions (FIX50SP2 layered via 1128)
+        far_leg_tags = {f.tag for f in groups[555].entries[1].fields}
+        assert {588, 637, 1073, 1788} <= far_leg_tags
+
+    def test_report_parse_equals_raw_parse(self) -> None:
+        report_message = self._parse()
+        raw_parser = FixParser(ParserConfig(strict_checksum=False, strict_body_length=False))
+        raw_message = raw_parser.parse(
+            RAW_EQUIVALENT_PARSED_REPORT_DOR_SWAP_EXEC,
+            auto_detect_venue=True,
+        )
+
+        assert [(f.tag, f.raw_value) for f in report_message.fields] == [
+            (f.tag, f.raw_value) for f in raw_message.fields
+        ]
+        assert report_message.venue == raw_message.venue

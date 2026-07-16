@@ -663,3 +663,137 @@ THREE_SIXTY_T_TI_ALL_SAMPLES = (
     THREE_SIXTY_T_TI_OPTION,
     THREE_SIXTY_T_TI_NDS,
 )
+
+# A pretty-printed "parsed FIX report" rendering (as produced by some
+# vendor log viewers) of a Bloomberg DOR FX swap execution report.
+# All identifiers are fabricated. Tags are numerically sorted within each
+# section and group entry, matching the report generator's behavior; the
+# BodyLength/CheckSum values are intentionally stale display values.
+PARSED_REPORT_DOR_SWAP_EXEC = """\
+(8)BeginString: FIXT.1.1
+(9)BodyLength: 1010
+(34)MsgSeqNum: 42
+(35)MsgType: ExecutionReport (8)
+(49)SenderCompID: TESTSND
+(52)SendingTime: 20260716-06:10:17.231761
+(56)TargetCompID: TESTTGT
+(115)OnBehalfOfCompID: DOR
+(128)DeliverToCompID: DOR
+(1128)ApplVerID: FIX50SP2 (9)
+(1129)CstmApplVerID: 1.8
+(1156)ApplExtID: 208
+(11)ClOrdID: ORD0000000000000001
+(14)CumQty: 0
+(15)Currency: GBP
+(17)ExecID: 900000001
+(37)OrderID: 900000000
+(39)OrdStatus: FILLED (2)
+(54)Side: BUY (1)
+(55)Symbol: GBP/USD
+(60)TransactTime: 20260716-06:10:17.015
+(75)TradeDate: 20260716
+(150)ExecType: TRADE (F)
+(151)LeavesQty: 0
+(167)SecurityType: FX_SWAP (FXSWAP)
+(194)LastSpotRate: 1.35325
+(460)Product: CURRENCY (4)
+(1071)LastSwapPoints: -0.000008
+(1300)MarketSegmentID: BTBS
+(22159)Ccy1MarketType: R
+(22160)Ccy2MarketType: R
+(453)NoPartyIDs: 3
+  (447)PartyIDSource: PROPRIETARY_CUSTOM_CODE (D)
+  (448)PartyID: 1a2b3c4d5e6f0000
+  (452)PartyRole: ORDER_ORIGINATION_FIRM (13)
+  (802)NoPartySubIDs: 1
+    (523)PartySubID: TESTLEI00000000000AA
+    (803)PartySubIDType: LEGAL_ENTITY_IDENTIFIER (4025)
+    ----
+  (447)PartyIDSource: PROPRIETARY_CUSTOM_CODE (D)
+  (448)PartyID: 12345678
+  (452)PartyRole: ORDER_ORIGINATION_TRADER (11)
+    ----
+  (447)PartyIDSource: PROPRIETARY_CUSTOM_CODE (D)
+  (448)PartyID: EXF1
+  (452)PartyRole: EXECUTING_FIRM (1)
+  (802)NoPartySubIDs: 1
+    (523)PartySubID: TESTLEI00000000000BB
+    (803)PartySubIDType: LEGAL_ENTITY_IDENTIFIER (4025)
+(555)NoLegs: 2
+  (556)LegCurrency: GBP
+  (587)LegSettlType: B
+  (588)LegSettlDate: 20260721
+  (600)LegSymbol: GBP/USD
+  (607)LegProduct: 4
+  (609)LegSecurityType: FXFWD
+  (624)LegSide: 2
+  (637)LegLastPx: 1.353249
+  (685)LegOrderQty: 1000000
+  (1073)LegLastForwardPoints: -0.01
+  (1074)LegCalculatedCcyLastQty: 1353249
+  (1418)LegLastQty: 1000000
+  (1788)LegID: 1
+    ----
+  (556)LegCurrency: GBP
+  (587)LegSettlType: B
+  (588)LegSettlDate: 20260803
+  (600)LegSymbol: GBP/USD
+  (607)LegProduct: 4
+  (609)LegSecurityType: FXFWD
+  (624)LegSide: 1
+  (637)LegLastPx: 1.353241
+  (685)LegOrderQty: 1000000
+  (1073)LegLastForwardPoints: -0.09
+  (1074)LegCalculatedCcyLastQty: 1353241
+  (1418)LegLastQty: 1000000
+  (1788)LegID: 2
+(1907)RegulatoryTradeIDs: 3
+  (1903)RegulatoryTradeID: TESTLEI00000000000AATRD0000000000001
+  (1904)RegulatoryTradeIDEvent: 0
+  (1905)RegulatoryTradeIDSource: TESTLEI00000000000AA
+  (1906)RegulatoryTradeIDType: 5
+    ----
+  (1903)RegulatoryTradeID: TESTLEI00000000000AATRD0000000000001
+  (1904)RegulatoryTradeIDEvent: 0
+  (1905)RegulatoryTradeIDSource: TESTLEI00000000000AA
+  (1906)RegulatoryTradeIDType: 5
+  (2411)RegulatoryLegRefID: 1
+    ----
+  (1903)RegulatoryTradeID: TESTLEI00000000000AATRD0000000000001
+  (1904)RegulatoryTradeIDEvent: 0
+  (1905)RegulatoryTradeIDSource: TESTLEI00000000000AA
+  (1906)RegulatoryTradeIDType: 5
+  (2411)RegulatoryLegRefID: 2
+(10)CheckSum: 127
+"""
+
+# Independently authored raw equivalent of the parsed report above. Keeping
+# the complete field sequence as a static fixture prevents the report
+# converter from serving as its own integration-test oracle.
+RAW_EQUIVALENT_PARSED_REPORT_DOR_SWAP_EXEC = (
+    "8=FIXT.1.1|9=1010|35=8|34=42|49=TESTSND|"
+    "52=20260716-06:10:17.231761|56=TESTTGT|115=DOR|128=DOR|"
+    "1128=9|1129=1.8|1156=208|"
+    "11=ORD0000000000000001|14=0|15=GBP|17=900000001|37=900000000|"
+    "39=2|54=1|55=GBP/USD|60=20260716-06:10:17.015|75=20260716|"
+    "150=F|151=0|167=FXSWAP|194=1.35325|460=4|1071=-0.000008|"
+    "1300=BTBS|22159=R|22160=R|"
+    "453=3|"
+    "447=D|448=1a2b3c4d5e6f0000|452=13|802=1|"
+    "523=TESTLEI00000000000AA|803=4025|"
+    "447=D|448=12345678|452=11|"
+    "447=D|448=EXF1|452=1|802=1|523=TESTLEI00000000000BB|803=4025|"
+    "555=2|"
+    "556=GBP|587=B|588=20260721|600=GBP/USD|607=4|609=FXFWD|624=2|"
+    "637=1.353249|685=1000000|1073=-0.01|1074=1353249|1418=1000000|1788=1|"
+    "556=GBP|587=B|588=20260803|600=GBP/USD|607=4|609=FXFWD|624=1|"
+    "637=1.353241|685=1000000|1073=-0.09|1074=1353241|1418=1000000|1788=2|"
+    "1907=3|"
+    "1903=TESTLEI00000000000AATRD0000000000001|1904=0|"
+    "1905=TESTLEI00000000000AA|1906=5|"
+    "1903=TESTLEI00000000000AATRD0000000000001|1904=0|"
+    "1905=TESTLEI00000000000AA|1906=5|2411=1|"
+    "1903=TESTLEI00000000000AATRD0000000000001|1904=0|"
+    "1905=TESTLEI00000000000AA|1906=5|2411=2|"
+    "10=127|"
+)

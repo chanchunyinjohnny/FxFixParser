@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from fxfixparser.core.exceptions import ChecksumError, ParseError, ValidationError
 from fxfixparser.core.field import FixField, FixFieldDefinition
 from fxfixparser.core.message import FixMessage
+from fxfixparser.core.report_format import looks_like_parsed_report, parsed_report_to_raw
 from fxfixparser.spec.loader import load_spec_for_appl_ver_id
 from fxfixparser.tags.dictionary import TagDictionary
 
@@ -58,7 +59,10 @@ class FixParser:
         """Parse a raw FIX message string into a FixMessage object.
 
         Args:
-            raw_message: The raw FIX message string to parse.
+            raw_message: The raw FIX message string to parse. Also accepts
+                   pretty-printed "parsed report" text (one
+                   ``(tag)FieldName: value`` per line), which is detected
+                   and reconstructed into a raw stream automatically.
             venue: Optional venue handler or venue name. When specified,
                    venue-specific tag definitions will be applied, which may
                    override generic definitions for the same tag numbers.
@@ -76,7 +80,15 @@ class FixParser:
         # Resolve venue handler if needed
         venue_handler = self._resolve_venue(venue)
 
-        normalized = self._normalize_delimiter(raw_message)
+        # Pretty-printed "parsed report" input is reconstructed into a raw
+        # SOH stream. The converted string is already canonical SOH, so
+        # delimiter normalization is bypassed — pipe replacement would
+        # corrupt converted values that legitimately contain "|".
+        converted_from_report = looks_like_parsed_report(raw_message)
+        if converted_from_report:
+            normalized = parsed_report_to_raw(raw_message)
+        else:
+            normalized = self._normalize_delimiter(raw_message)
         raw_fields = self._extract_fields(normalized)
 
         if not raw_fields:
@@ -91,7 +103,11 @@ class FixParser:
         dictionary = self._get_dictionary_for_venue(venue_handler, spec_base)
 
         fields = self._build_fields(raw_fields, dictionary)
-        message = FixMessage(fields=fields, raw_message=raw_message)
+        message = FixMessage(
+            fields=fields,
+            raw_message=raw_message,
+            converted_from_report=converted_from_report,
+        )
 
         # Auto-detect the venue from the message's component IDs when no
         # explicit venue was given, then rebuild the fields against the
@@ -103,6 +119,7 @@ class FixParser:
                 message = FixMessage(
                     fields=self._build_fields(raw_fields, dictionary),
                     raw_message=raw_message,
+                    converted_from_report=converted_from_report,
                 )
 
         # Apply venue enrichment (also sets message.venue) when a handler
@@ -110,8 +127,10 @@ class FixParser:
         # specific logic like SGX Titan OTC's product-name lookup.
         if venue_handler:
             message = venue_handler.enhance_message(message)
+            message.raw_message = raw_message
+            message.converted_from_report = converted_from_report
 
-        self._validate_structure(message, normalized)
+        self._validate_structure(message, normalized, strict=not converted_from_report)
 
         return message
 
@@ -310,8 +329,16 @@ class FixParser:
             fields.append(FixField(tag=tag, raw_value=value, definition=definition))
         return fields
 
-    def _validate_structure(self, message: FixMessage, normalized: str) -> None:
-        """Validate the FIX message structure."""
+    def _validate_structure(
+        self, message: FixMessage, normalized: str, *, strict: bool = True
+    ) -> None:
+        """Validate the FIX message structure.
+
+        With ``strict=False`` (used for input converted from a parsed
+        report, which is a display rendering and not guaranteed
+        byte-faithful), the declared BodyLength and CheckSum values are
+        not verified. Header/trailer ordering checks always apply.
+        """
         if not message.fields:
             raise ValidationError("Message has no fields")
 
@@ -332,11 +359,11 @@ class FixParser:
             raise ValidationError("Message must end with CheckSum (tag 10)")
 
         # Validate declared body length if strict mode
-        if self.config.strict_body_length:
+        if strict and self.config.strict_body_length:
             self._validate_body_length(message, normalized)
 
         # Validate checksum if strict mode
-        if self.config.strict_checksum:
+        if strict and self.config.strict_checksum:
             self._validate_checksum(message, normalized)
 
     def _validate_body_length(self, message: FixMessage, normalized: str) -> None:

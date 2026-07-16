@@ -193,6 +193,12 @@ class TestFixMessage:
         assert d["venue"] == "TestVenue"
         assert len(d["fields"]) == 3
 
+    def test_message_to_dict_includes_conversion_provenance(self) -> None:
+        """Test that to_dict exposes parsed-report conversion provenance."""
+        message = FixMessage(converted_from_report=True)
+
+        assert message.to_dict()["converted_from_report"] is True
+
     def test_venue_extras_defaults_to_empty_dict(self) -> None:
         """venue_extras defaults to an empty dict on a new FixMessage."""
         msg = FixMessage()

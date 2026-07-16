@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import sys
 
 # Add src to path so imports work when running directly
@@ -11,6 +12,10 @@ from fxfixparser.core.exceptions import ChecksumError, ParseError, ValidationErr
 from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.products.base import ProductRegistry
 from fxfixparser.venues.registry import VenueRegistry
+
+
+_REPORT_START_RE = re.compile(r"^\s*\(8\)[^:]*:")
+_REPORT_END_RE = re.compile(r"^\s*\(10\)[^:]*:")
 
 
 def parse_and_display(raw_message: str, output_format: str, venue_name: str | None,
@@ -145,6 +150,34 @@ def print_trade_summary(trade, message):
         print(f"  Product:  {message.product_type or 'N/A'}")
 
 
+def _read_interactive_message() -> str | None:
+    """Read one raw FIX message or one multiline parsed report."""
+    try:
+        first_line = input("FIX> ")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+
+    stripped = first_line.strip()
+    if not stripped or stripped.lower() in ("quit", "exit", "q"):
+        return None
+    if _REPORT_START_RE.match(first_line) is None:
+        return stripped
+
+    lines = [first_line]
+    while _REPORT_END_RE.match(lines[-1]) is None:
+        try:
+            line = input("...> ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return None
+        if not line.strip():
+            break
+        lines.append(line)
+
+    return "\n".join(lines)
+
+
 def interactive_mode(output_format: str, venue_name: str | None,
                      strict_checksum: bool, strict_body_length: bool) -> None:
     """Run the parser in interactive mode, prompting for messages."""
@@ -152,13 +185,8 @@ def interactive_mode(output_format: str, venue_name: str | None,
     print("Paste a FIX message and press Enter to parse. Type 'quit' to exit.\n")
 
     while True:
-        try:
-            raw = input("FIX> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            break
-
-        if not raw or raw.lower() in ("quit", "exit", "q"):
+        raw = _read_interactive_message()
+        if raw is None:
             break
 
         parse_and_display(raw, output_format, venue_name, strict_checksum, strict_body_length)

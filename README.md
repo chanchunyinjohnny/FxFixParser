@@ -33,7 +33,7 @@ These cryptic tag-number pairs are hard to read without constantly referencing t
 - **Trade summary** — extracts key trade details (symbol, side, quantity, price, settlement date) at a glance
 - **Repeating group support** — correctly parses and displays nested groups like market data entries, legs, and party IDs
 - **Multiple output formats** — table, human-readable text, and JSON
-- **Flexible input** — accepts both standard SOH delimiters and pipe (`|`) delimiters commonly found in logs
+- **Flexible input** — accepts standard SOH delimiters, pipe (`|`) delimiters commonly found in logs, and pre-parsed FIX report text (one `(tag)Field: value` per line, as produced by some log viewers) which is reconstructed into the raw message automatically
 - **Web UI and CLI** — use whichever suits your workflow
 
 ## Quick Start
