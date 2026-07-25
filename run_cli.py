@@ -40,9 +40,11 @@ def parse_and_display(raw_message: str, output_format: str, venue_name: str | No
             venue_registry.get(message.venue) if message.venue else None
         )
 
-        # Detect product type
+        # Detect product type. Prefer a venue-derived product_type (set by
+        # enhance_message) over the generic detection — some venues carry the
+        # product only in venue-specific fields the registry cannot see.
         product_handler = product_registry.detect(message)
-        if product_handler:
+        if product_handler and not message.product_type:
             message.product_type = product_handler.product_type
 
         # Output based on format

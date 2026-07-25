@@ -5,21 +5,35 @@ Thomson Reuters) FX Matching, the anonymous interbank central-limit-order-book
 ("Matching") venue. Products are FX Spot (SecurityType=FXSPOT) and FX Forward
 Swap (SecurityType=FXSWAP, Near/Far two-leg).
 
+Written against the *LSEG FX Matching FIX Interface User Guide* v1.21
+(20 March 2025).
+
 The application layer is FIX 5.0 SP2 (with extension packs EP100/EP171) over a
-FIXT 1.1 session layer; every message carries ApplVerID(1128)=9, so the bundled
-``spec/FIX50SP2.xml`` is auto-loaded by the parser and the entire standard tag
+FIXT 1.1 session layer. The session negotiates DefaultApplVerID(1137)=9 at
+Logon; ApplVerID(1128)=9 is optional per message (the Chapter-5 header table
+marks it "not required") but is normally present, and when it is the bundled
+``spec/FIX50SP2.xml`` is auto-loaded by the parser so the entire standard tag
 space decodes without help. This handler adds the MAPI-specific layer:
 
 * MAPI User-Defined Fields (LockedStatus 5007, the MiFID-II MTF-forward fields
   TR_TradingCapacity 31344 / TR_Npft 31345, OrdersLockFilter 20020).
-* Venue-scoped tag-number *overrides* — MAPI reuses a handful of standard tag
-  numbers (1097, 1149, 1418, 1056) with different meanings. ``custom_tags``
-  replaces the definition only while this venue is active, so other venues keep
-  the standard meaning (the same per-venue isolation Bloomberg DOR / SGX Titan
-  OTC rely on).
+* One venue-scoped tag-number *override*: the TradeCaptureReport (35=AE)
+  overloads tag 1056, carrying the swap's spot reference rate there instead of
+  the standard CalculatedCcyLastQty. ``custom_tags`` replaces the definition
+  only while this venue is active, so other venues keep the standard meaning
+  (the same per-venue isolation Bloomberg DOR / SGX Titan OTC rely on).
 * Enum subsets MAPI assigns venue-specific meaning to (SecurityType FXSWAP =
   "FX Forward Swap", PriceType 20/21 = Normal/Inverse, ExecType F/I =
   hard/soft match, the quote-negotiation and party/settlement enums, etc.).
+* Two MAPI quantity/price conventions the shared extraction cannot guess:
+  every quantity is in units of ContractMultiplier(231) = 1,000,000, and an
+  FX Forward Swap is priced in *swap points* via Price(44) rather than an
+  all-in rate. See :meth:`LSEGFXMatchingHandler.extract_trade`.
+
+Everything else MAPI sends is standard FIX 5.0 SP2 and decodes from the bundled
+spec — in particular, bilateral credit travels in the NoLimitAmts(1630) group as
+LastLimitAmt(1632) / LimitAmtRemaining(1633), and the per-leg calculated
+quoted-currency quantity is LegCalculatedCcyLastQty(1074).
 
 Credit / Prime-Broker-Client admin messages (U1/U2/U3, PartyAction*) are
 *labelled* (their MsgTypes and field names decode) but their body structure is
@@ -31,8 +45,18 @@ proprietary-data policy. See
 """
 
 from fxfixparser.core.field import FixFieldDefinition
+from fxfixparser.core.fx_math import parse_symbol, pip_size
 from fxfixparser.core.message import FixMessage, ParsedTrade
 from fxfixparser.venues.base import VenueHandler
+
+# ContractMultiplier(231) is "Always 1000000" on MAPI; used when a message
+# omits the tag (it is conditional on the Pending-Cancel / Pending-Replace
+# ExecutionReports and absent from the quote-negotiation messages).
+_MAPI_CONTRACT_MULTIPLIER = 1_000_000.0
+
+# The forward-swap quote-negotiation pair. Quote(S) proposes, QuoteResponse(AJ)
+# hits/counters/passes; both carry the amounts under negotiation.
+_NEGOTIATION_MSG_TYPES = frozenset({"S", "AJ"})
 
 # ---------------------------------------------------------------------------
 # Custom tag definitions
@@ -43,9 +67,10 @@ _LSEG_CUSTOM_TAGS: dict[int, FixFieldDefinition] = {
         5007,
         "LockedStatus",
         "BOOLEAN",
-        "FX Spot Standard orders only: marks an order as locked, affecting how "
-        "Mass Action Cancel (with OrdersLockFilter 20020) targets it. Set only "
-        "at submission; defaults to N. Not allowed on FX Forward Swap or IOC.",
+        "FX Spot orders only (any order type except IOC): marks an order as "
+        "locked, affecting how Mass Action Cancel (with OrdersLockFilter 20020) "
+        "targets it. Set only at submission; defaults to N. Not allowed on FX "
+        "Forward Swap or IOC.",
         {"Y": "Locked", "N": "Not locked (default)"},
     ),
     20020: FixFieldDefinition(
@@ -79,44 +104,24 @@ _LSEG_CUSTOM_TAGS: dict[int, FixFieldDefinition] = {
         "BOOLEAN",
         "MiFID II (MTF forwards) Non Price-Forming Transaction flag on FXSWAP "
         "(securities financing, clearing/settlement-only, or portfolio "
-        "compression). Appears inside the TradeCaptureReport NoSides group.",
+        "compression). Optional on NewOrderSingle(D) entry, defaulting to N; "
+        "conditionally required on ExecutionReport(8) and inside the "
+        "TradeCaptureReport(AE) NoSides group, echoed back or defaulted.",
         {
             "Y": "Non Price Forming Trade",
             "N": "Not a Non Price Forming Trade (default)",
         },
     ),
-    # --- Venue-scoped overrides: MAPI reuses these standard tag numbers ---
-    1097: FixFieldDefinition(
-        1097,
-        "LastLimitAmt",
-        "AMT",
-        "MAPI (FXSPOT TradeCaptureReport): credit drawn down by this trade, in "
-        "whole millions. Overrides standard PegSecurityID for this venue. "
-        "(Chapter-5 message tables instead use the NoLimitAmts(1630) group.)",
-    ),
-    1149: FixFieldDefinition(
-        1149,
-        "LimitRemainingAmt",
-        "AMT",
-        "MAPI (FXSPOT TradeCaptureReport): bilateral credit remaining, in whole "
-        "millions. Overrides standard HighLimitPrice for this venue. "
-        "(Chapter-5 message tables instead use LimitAmtRemaining(1633).)",
-    ),
-    1418: FixFieldDefinition(
-        1418,
-        "LegCalculatedCcyLastQty",
-        "QTY",
-        "MAPI: calculated quoted-currency quantity for a swap leg. The same "
-        "datum is carried as standard tag 1074 in other message tables, so the "
-        "handler reads either. Overrides standard LegLastQty for this venue.",
-    ),
+    # --- Venue-scoped override: MAPI reuses this standard tag number ---
     1056: FixFieldDefinition(
         1056,
         "CalculatedCcyLastQty",
         "PRICE",
-        "MAPI overloads this tag, resolved by SecurityType(167): FXSWAP => "
-        "LastSpotRate (the swap's spot reference rate); FXSPOT => "
-        "CalculatedCcyLastQty (calculated quoted-currency quantity).",
+        "TradeCaptureReport(35=AE) only, resolved by SecurityType(167): FXSWAP "
+        "=> LastSpotRate (the swap's spot reference rate); FXSPOT => "
+        "CalculatedCcyLastQty (calculated quoted-currency quantity, already "
+        "multiplied by ContractMultiplier(231)). The ExecutionReport(35=8) "
+        "carries the swap spot reference in the standard LastSpotRate(194).",
     ),
     # --- Credit / PBC admin UDFs: labelling only (bodies out of scope) ---
     20003: FixFieldDefinition(
@@ -385,8 +390,7 @@ _LSEG_ENUM_EXTENSIONS: dict[int, dict[str, str]] = {
     783: {"C": "Generally accepted market participant identifier"},
     784: {
         "27": "Buyer/Seller (Receiver/Deliverer) - non-CLS trades",
-        "86": "CLS Member Bank",
-        "82": "CLS Member Bank (provisional)",
+        "86": "CLS Member Bank - trade marked for CLS settlement",
     },
     786: {"16": "BIC / SWIFT Code"},
     1164: {"4": "Buyer's settlement instructions", "5": "Seller's settlement instructions"},
@@ -399,10 +403,12 @@ _LSEG_ENUM_EXTENSIONS: dict[int, dict[str, str]] = {
         "2": "Sell (from volume-currency perspective)",
     },
     654: {
-        "Near": "Near leg (ExecutionReport/Quote/QuoteResponse form)",
-        "Far": "Far leg (ExecutionReport/Quote/QuoteResponse form)",
-        "1": "1st leg = Near (TradeCaptureReport positional form)",
-        "2": "2nd leg = Far (TradeCaptureReport positional form)",
+        "Near": "Near leg of the FX Swap (1st NoLegs entry)",
+        "Far": "Far leg of the FX Swap (2nd NoLegs entry)",
+    },
+    552: {
+        "1": "One side - an FX Spot trade (always reported from the receiving user's perspective)",
+        "2": "Two entries - the near and far legs of an FX Swap, not two counterparty sides",
     },
     1631: {
         "0": "Credit Limit (the value used by Matching)",
@@ -461,6 +467,14 @@ def _to_float(value: str | None) -> float | None:
         return None
 
 
+def _leg_entries(message: FixMessage) -> list[dict[str, str]]:
+    """Return the NoLegs (555) group entries as {tag_str: value} dicts."""
+    for sf in message.get_structured_fields():
+        if sf.is_group and sf.group and sf.group.count_field.tag == 555:
+            return [{str(f.tag): f.raw_value for f in entry.fields} for entry in sf.group.entries]
+    return []
+
+
 class LSEGFXMatchingHandler(VenueHandler):
     """Handler for LSEG / Refinitiv FX Matching (MAPI) FIX messages."""
 
@@ -494,6 +508,11 @@ class LSEGFXMatchingHandler(VenueHandler):
         counterparty = self._counterparty(message)
         if counterparty:
             message.venue_extras["counterparty"] = counterparty
+        # The Quote(S)/QuoteResponse(AJ) negotiation cluster exists only for FX
+        # Forward Swaps, but carries no SecurityType(167) for the generic
+        # product detection to key off, so name the product here.
+        if message.msg_type in _NEGOTIATION_MSG_TYPES:
+            message.product_type = "Swap"
         return message
 
     def extract_trade(self, message: FixMessage) -> ParsedTrade:
@@ -507,15 +526,118 @@ class LSEGFXMatchingHandler(VenueHandler):
         # event). Prefer SecondaryExecID(527), then TradeID(1003) on a TCR.
         trade.exec_id = message.get_value(527) or message.get_value(1003) or message.get_value(17)
 
-        # FXSWAP overloads tag 1056 as the spot reference rate. When the explicit
-        # LastSpotRate(194) is absent, the base handler falls back to the near
-        # leg price; 1056 is the more correct spot reference, so prefer it.
+        # The TradeCaptureReport overloads tag 1056 as the swap spot reference
+        # rate (the ExecutionReport uses the standard LastSpotRate(194)). When
+        # 194 is absent the base handler falls back to the near leg price; 1056
+        # is the venue's own spot reference, so prefer it.
         if trade.is_swap and message.get_value(167) == "FXSWAP" and not message.get_value(194):
             spot_1056 = _to_float(message.get_value(1056))
             if spot_1056 is not None:
                 trade.spot_rate = spot_1056
 
+        self._apply_swap_price_semantics(message, trade)
+        self._extract_negotiated_quantities(message, trade)
+        self._apply_contract_multiplier(message, trade)
+
         return trade
+
+    @staticmethod
+    def _apply_swap_price_semantics(message: FixMessage, trade: ParsedTrade) -> None:
+        """Reconcile MAPI's swap-points pricing with ``ParsedTrade.price``.
+
+        MAPI prices an FX Forward Swap in *swap points*, not an all-in rate:
+        Price(44) "specifies the swap points not the all-in rate" and the
+        ExecutionReport echoes it back unchanged, while LastPx(31) is sent only
+        for SecurityType(167)=FXSPOT. The shared ``31 or 44`` fallback would
+        therefore leave swap points sitting in ``trade.price`` on every FXSWAP
+        order and non-match execution report.
+
+        Leg-less FXSWAP messages (NewOrderSingle, ExecutionReports whose
+        ExecType is not F/I) also defeat the shared swap detection: MAPI never
+        sends the side-by-side 192/193 shape and only populates NoLegs(555) on
+        match reports. Flag those as swaps here.
+        """
+        if message.get_value(167) != "FXSWAP":
+            return
+
+        if not trade.is_swap:
+            trade.is_swap = True
+            base_ccy, term_ccy = parse_symbol(trade.symbol)
+            trade.base_currency = trade.base_currency or base_ccy
+            trade.term_currency = trade.term_currency or term_ccy
+            trade.trade_currency = trade.trade_currency or message.get_value(15)
+
+        # LastPx(31) present means a genuine rate (on the TradeCaptureReport it
+        # is the all-in price of the far leg), so leave trade.price alone.
+        if message.get_value(31) is not None:
+            return
+
+        points = _to_float(message.get_value(44))
+        if points is None:
+            return
+        if trade.swap_points is None:
+            trade.swap_points = points
+            ps = pip_size(trade.symbol)
+            trade.pip_size = ps
+            if ps:
+                trade.swap_points_pips = points / ps
+        # Never let the raw points masquerade as a rate. Where the legs are
+        # present, follow MAPI's own convention for LastPx on the swap
+        # TradeCaptureReport: the all-in price of the far leg.
+        trade.price = trade.far_leg_price
+
+    @staticmethod
+    def _extract_negotiated_quantities(message: FixMessage, trade: ParsedTrade) -> None:
+        """Pull the negotiated amounts out of a Quote(S) / QuoteResponse(AJ).
+
+        The forward-swap negotiation messages carry no SecurityType(167), no
+        bid/offer sizes and no settlement dates — the amounts under negotiation
+        are OrderQty(38) at message level and LegOrderQty(685) per leg, keyed by
+        LegRefID(654) = Near/Far. The shared quote extraction reads none of
+        those, so a MAPI negotiation would otherwise surface no quantity at all.
+        """
+        if message.msg_type not in _NEGOTIATION_MSG_TYPES:
+            return
+
+        trade.is_swap = True
+        base_ccy, term_ccy = parse_symbol(trade.symbol)
+        trade.base_currency = trade.base_currency or base_ccy
+        trade.term_currency = trade.term_currency or term_ccy
+        if trade.quantity is None:
+            trade.quantity = _to_float(message.get_value(38))
+
+        legs = _leg_entries(message)
+        if len(legs) < 2:
+            return
+        by_ref = {(leg.get("654") or "").lower(): leg for leg in legs}
+        near = by_ref.get("near", legs[0])
+        far = by_ref.get("far", legs[-1])
+        trade.near_quantity = _to_float(near.get("685"))
+        trade.far_quantity = _to_float(far.get("685"))
+
+    @staticmethod
+    def _apply_contract_multiplier(message: FixMessage, trade: ParsedTrade) -> None:
+        """Scale MAPI's contract quantities into real notional amounts.
+
+        ContractMultiplier(231) is "Always 1000000" and "unless otherwise
+        specified all quantity related fields will be implicitly multiplied by
+        this amount" — OrderQty(38)=1 means 1,000,000, and instruments with
+        smaller lot sizes send fractions (0.1 = 100,000). Chapter 7 repeats it
+        for LastQty. Without this every MAPI amount would read a million times
+        too small next to the other venues.
+
+        Only the raw contract quantities are scaled: CalculatedCcyLastQty(1056)
+        and LegCalculatedCcyLastQty(1074) are already multiplied at source, and
+        the credit amounts in the NoLimitAmts(1630) group are separately
+        documented as whole millions and are not surfaced on ParsedTrade.
+        """
+        multiplier = _to_float(message.get_value(231)) or _MAPI_CONTRACT_MULTIPLIER
+        if multiplier == 1.0:
+            return
+        for attr in ("quantity", "near_quantity", "far_quantity"):
+            value = getattr(trade, attr, None)
+            if value is not None:
+                setattr(trade, attr, value * multiplier)
 
     @staticmethod
     def _counterparty(message: FixMessage) -> str | None:

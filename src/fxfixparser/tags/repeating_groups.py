@@ -5,7 +5,7 @@ Each group is defined by a count tag (NUMINGROUP type) and the list of
 tags that belong to each group entry.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -15,6 +15,13 @@ class RepeatingGroupDefinition:
     count_tag: int  # The NUMINGROUP tag that indicates how many entries follow
     name: str  # Human-readable name for the group
     member_tags: set[int]  # Tags that belong to each group entry
+    # Members that come from a *nested* subgroup flattened into this one. The
+    # entry-boundary rule ("a member tag seen twice starts a new entry") must
+    # not apply to them: a nested subgroup legitimately repeats its own tags
+    # inside a single parent entry (e.g. one MAPI party carries two or three
+    # PartySubIDs, one MAPI TradeCaptureReport side carries two SettlDetails).
+    # Only tags that identify a *parent* entry may open a new one.
+    nested_member_tags: set[int] = field(default_factory=set)
 
 
 # Standard FIX 4.4 repeating groups commonly used in FX
@@ -88,6 +95,9 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             # entries (e.g. Investment Decision Maker / Executing Trader).
             2376,  # PartyRoleQualifier
         },
+        # A MAPI ExecutionReport party carries 2-3 PartySubIDs (TCID, trader,
+        # and the FX Swap negotiation user), so 523/803 repeat within one party.
+        nested_member_tags={523, 803},
     ),
     # Sides (Trade Capture Report side-level details)
     RepeatingGroupDefinition(
@@ -117,11 +127,49 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             # does not terminate NoSides early.
             1154,  # SideCurrency
             1057,  # AggressorIndicator
-            1097,  # LastLimitAmt (MAPI FXSPOT credit drawn; std PegSecurityID)
-            1149,  # LimitRemainingAmt (MAPI FXSPOT credit remaining; std HighLimitPrice)
             31344,  # TR_TradingCapacity (MAPI MiFID II)
             31345,  # TR_Npft (MAPI MiFID II)
             126,  # ExpireTime
+            # Nested LimitAmts(1630) and SettlDetails(1158) subgroups, flattened
+            # into the side. MAPI's TradeCaptureReport puts the bilateral credit
+            # block and both parties' settlement instructions *inside* each side
+            # (spec 5.4.16 / chapter 7.2.5); without these the walker terminates
+            # the side at the first nested count tag and the whole tail of the
+            # side — and, on a two-sided swap report, the entire second side —
+            # leaks out as message-level fields.
+            1630,  # NoLimitAmts
+            1631,  # LimitAmtType
+            1632,  # LastLimitAmt
+            1633,  # LimitAmtRemaining
+            1634,  # LimitAmtCurrency
+            1158,  # NoSettlDetails
+            1164,  # SettlObligSource
+            781,  # NoSettlPartyIDs
+            782,  # SettlPartyID
+            783,  # SettlPartyIDSource
+            784,  # SettlPartyRole
+            801,  # NoSettlPartySubIDs
+            785,  # SettlPartySubID
+            786,  # SettlPartySubIDType
+        },
+        # Everything from the two nested subgroups repeats within a single side
+        # (a MAPI side carries two SettlDetails instances), so none of it may
+        # open a new side — only a repeated Side(54) does.
+        nested_member_tags={
+            1630,
+            1631,
+            1632,
+            1633,
+            1634,
+            1158,
+            1164,
+            781,
+            782,
+            783,
+            784,
+            801,
+            785,
+            786,
         },
     ),
     # Related symbols (Quote Request, Market Data Request)
@@ -198,8 +246,8 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             1068,  # LegOfferForwardPoints
             1073,  # LegLastForwardPoints (executed swap legs)
             2346,  # LegMidPx
-            1074,  # LegCalculatedCcyLastQty (standard)
-            1418,  # LegCalculatedCcyLastQty (LSEG variant; standard LegLastQty)
+            1074,  # LegCalculatedCcyLastQty (LSEG FX Matching swap legs)
+            1418,  # LegLastQty (Bloomberg DOR executed leg amount)
             1893,  # LegExecID (per-leg execution ID)
             # Bloomberg DOR leg-scoped custom tags (defined in the venue
             # overlay); must be members so they don't terminate the walker.
@@ -296,6 +344,10 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             1121,  # RootPartySubID
             1122,  # RootPartySubIDType
         },
+        # On a MAPI TradeCaptureReport the report owner's block always carries
+        # two RootPartySubIDs (TCID then trader login), so 1121/1122 repeat
+        # within one party.
+        nested_member_tags={1121, 1122},
     ),
     # Settlement Parties (CLS / payment instructions)
     RepeatingGroupDefinition(
@@ -310,6 +362,7 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             785,  # SettlPartySubID
             786,  # SettlPartySubIDType
         },
+        nested_member_tags={785, 786},
     ),
     # Settlement Details (LSEG TradeCaptureReport; nests SettlParties)
     RepeatingGroupDefinition(
@@ -326,6 +379,9 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             785,  # SettlPartySubID
             786,  # SettlPartySubIDType
         },
+        # 1164 delimits each SettlDetails entry; everything below it comes from
+        # the nested SettlParties(781)/SettlPartySubIDs(801) subgroups.
+        nested_member_tags={781, 782, 783, 784, 801, 785, 786},
     ),
     # Limit Amounts (LSEG FXSPOT credit limits)
     RepeatingGroupDefinition(

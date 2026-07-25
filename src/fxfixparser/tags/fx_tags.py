@@ -216,6 +216,19 @@ FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
         "Source of the settlement obligation (e.g. buyer's/seller's instructions).",
     ),
     FixFieldDefinition(
+        1158,
+        "NoSettlDetails",
+        "NUMINGROUP",
+        "Number of settlement-detail entries; one per party on a TCR side.",
+    ),
+    FixFieldDefinition(
+        1630,
+        "NoLimitAmts",
+        "NUMINGROUP",
+        "Number of limit-amount entries carrying the bilateral credit position "
+        "consumed and remaining after the trade.",
+    ),
+    FixFieldDefinition(
         1631, "LimitAmtType", "INT", "Type of limit amount within the NoLimitAmts group."
     ),
     FixFieldDefinition(

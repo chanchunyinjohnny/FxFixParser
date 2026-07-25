@@ -194,8 +194,14 @@ class FixMessage:
 
                     if fld.tag in group_def.member_tags:
                         # Detect entry boundary: if we've already seen this
-                        # tag in the current entry, it marks a new entry
-                        if current_entry and fld.tag in seen_tags:
+                        # tag in the current entry, it marks a new entry.
+                        # Tags belonging to a flattened nested subgroup are
+                        # exempt — they repeat within one parent entry.
+                        if (
+                            current_entry
+                            and fld.tag in seen_tags
+                            and fld.tag not in group_def.nested_member_tags
+                        ):
                             # Save previous entry and start new one
                             group.entries.append(
                                 RepeatingGroupEntry(

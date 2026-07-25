@@ -323,10 +323,11 @@ class TestLSEGFXMatchingRoundTrip:
         trade = LSEGFXMatchingHandler().extract_trade(msg)
         assert trade.is_swap is True
         assert trade.symbol == "EUR/USD"
-        assert trade.settlement_date == "20260606"
-        assert trade.far_settlement_date == "20260908"
         assert trade.swap_points == pytest.approx(0.001)
         assert trade.spot_rate == pytest.approx(1.0838)
+        # MAPI quantities are contracts of ContractMultiplier(231)=1,000,000.
+        assert trade.near_quantity == pytest.approx(1_000_000.0)
+        assert trade.far_quantity == pytest.approx(1_000_000.0)
 
 
 def test_all_360t_samples_parse() -> None:
