@@ -17,6 +17,7 @@ from tests.fixtures.sample_messages import (
     BLOOMBERG_DOR_SWAP_QUOTE_RESPONSE,
     BLOOMBERG_DOR_SWAP_QUOTE_STATUS,
     BLOOMBERG_DOR_SWAP_QUOTE_STATUS_PASS,
+    BLOOMBERG_MAP_SWAP_EXEC,
 )
 
 
@@ -606,4 +607,146 @@ class TestBloombergDORSwapExecFull:
         # Explicit per-leg sides: near 624=2 (Sell EUR), far 624=1 (Buy EUR)
         assert trade.near_leg_action == "Sell EUR"
         assert trade.far_leg_action == "Buy EUR"
+        assert trade.swap_side_source == "legs"
+
+
+class TestBloombergMAPSwapExec:
+    """Coverage for the Bloomberg MAP gateway swap ER.
+
+    MAP is the plain FIX 4.4 flavor of the ORP/DOR dialect: MAP_<party>
+    CompIDs (Bloomberg side always MAP_BLP*), no FIXT / 115 / 128 markers,
+    flat package-level regulatory ID fields before the 1907 count, and a
+    CompDealerQuoteGrp (10009) holding reference-rate pseudo-dealers.
+    """
+
+    @pytest.fixture
+    def handler(self):
+        return BloombergDORHandler()
+
+    @pytest.fixture
+    def parser(self):
+        # The fixture's BodyLength and CheckSum are byte-valid, so parse in
+        # fully strict mode to guard against fixture rot.
+        return FixParser(config=ParserConfig(strict_checksum=True, strict_body_length=True))
+
+    def _group(self, message, count_tag: int):
+        for sf in message.get_structured_fields():
+            if sf.is_group and sf.group is not None and sf.group.count_field.tag == count_tag:
+                return sf.group
+        return None
+
+    def test_autodetects_bloomberg_dor(self, parser):
+        """MAP_BLP* CompIDs must resolve to the Bloomberg DOR handler even
+        without FIXT / routing markers."""
+        message = parser.parse(BLOOMBERG_MAP_SWAP_EXEC, auto_detect_venue=True)
+        assert message.venue == "Bloomberg DOR"
+
+    def test_claims_message_both_directions(self, handler):
+        """The MAP_BLP CompID may sit on either side of the session."""
+        from fxfixparser.core.field import FixField
+        from fxfixparser.core.message import FixMessage
+
+        bloomberg_sends = FixMessage(
+            fields=[
+                FixField(tag=49, raw_value="MAP_BLP_BETA"),
+                FixField(tag=56, raw_value="MAP_CLIENT_BETA"),
+            ]
+        )
+        client_sends = FixMessage(
+            fields=[
+                FixField(tag=49, raw_value="MAP_CLIENT_BETA"),
+                FixField(tag=56, raw_value="MAP_BLP_BETA"),
+            ]
+        )
+        no_bloomberg = FixMessage(
+            fields=[
+                FixField(tag=49, raw_value="MAP_CLIENT_BETA"),
+                FixField(tag=56, raw_value="MAP_OTHERBANK"),
+            ]
+        )
+        assert handler.claims_message(bloomberg_sends) is True
+        assert handler.claims_message(client_sends) is True
+        assert handler.claims_message(no_bloomberg) is False
+
+    def test_regulatory_tags_resolve(self, parser):
+        """1903/1905/1906/1907/2411 must resolve without an ApplVerID spec
+        layer (MAP is plain FIX 4.4, so the venue overlay supplies them)."""
+        message = parser.parse(BLOOMBERG_MAP_SWAP_EXEC, auto_detect_venue=True)
+
+        assert message.get_field(1903).name == "RegulatoryTradeID"
+        assert message.get_field(1905).name == "RegulatoryTradeIDSource"
+        assert message.get_field(1907).name == "NoRegulatoryTradeIDs"
+        reg_type = message.get_field(1906)
+        assert reg_type.name == "RegulatoryTradeIDType"
+        assert reg_type.value_description == "Current (default if not specified)"
+        leg_ref = message.get_field(2411)
+        assert leg_ref.name == "RegulatoryLegRefID"
+        assert leg_ref.raw_value == "2"
+
+    def test_exec_method_decodes(self, parser):
+        """2405=2 must decode as Automated execution."""
+        message = parser.parse(BLOOMBERG_MAP_SWAP_EXEC, auto_detect_venue=True)
+        exec_method = message.get_field(2405)
+        assert exec_method.name == "ExecMethod"
+        assert exec_method.value_description == "Automated"
+
+    def test_comp_dealer_quote_group_parses_both_entries(self, parser):
+        """10009=2 must yield two complete entries — including the
+        undocumented member 22545, which must not split the group."""
+        message = parser.parse(BLOOMBERG_MAP_SWAP_EXEC, auto_detect_venue=True)
+        group = self._group(message, 10009)
+        assert group is not None, "Competing Dealer Quotes group not detected"
+        assert group.count == 2
+        assert len(group.entries) == 2
+
+        expected_tags = {10010, 10011, 22161, 22162, 22163, 22276, 22485, 22486, 22545}
+        for entry in group.entries:
+            assert {f.tag for f in entry.fields} == expected_tags
+
+        dealer_ids = [f.raw_value for e in group.entries for f in e.fields if f.tag == 10010]
+        assert dealer_ids == ["MidRate", "RefRate"]
+
+    def test_comp_dealer_tags_resolve_with_bloomberg_meanings(self, parser):
+        """10011 must decode as CompDealerQuotePrice (not the LFX
+        IsSEFTrade meaning) and 22276=0 as an indicative quote."""
+        message = parser.parse(BLOOMBERG_MAP_SWAP_EXEC, auto_detect_venue=True)
+        assert message.get_field(10011).name == "CompDealerQuotePrice"
+        assert message.get_field(22163).name == "CompDealerQuoteSwapPoints"
+        quote_type = message.get_field(22276)
+        assert quote_type.name == "CompDealerQuoteType"
+        assert quote_type.value_description == "Indicative (Bloomberg provided)"
+
+    def test_liquidity_taker_sub_id_decodes(self, parser):
+        """PartySubIDType 4047 must decode as Liquidity taker."""
+        message = parser.parse(BLOOMBERG_MAP_SWAP_EXEC, auto_detect_venue=True)
+        sub_id_types = [f for f in message.get_fields(803) if f.raw_value == "4047"]
+        assert sub_id_types, "PartySubIDType 4047 not present in fixture"
+        assert sub_id_types[0].value_description == "Liquidity taker"
+
+    def test_only_undocumented_tags_stay_unknown(self, parser):
+        """22078-22081 and 22277 are absent from the ORP 1.9.8 spec, so
+        they must stay unknown (definitions are never invented) — and
+        nothing else may be unknown."""
+        message = parser.parse(BLOOMBERG_MAP_SWAP_EXEC, auto_detect_venue=True)
+        unknown = sorted({f.tag for f in message.fields if f.definition is None})
+        assert unknown == [22078, 22079, 22080, 22081, 22277]
+
+    def test_extract_trade_swap_summary(self, handler, parser):
+        """The USD/CAD swap summary must populate both legs from the 555
+        group with per-leg sides."""
+        message = parser.parse(BLOOMBERG_MAP_SWAP_EXEC, venue=handler)
+        trade = handler.extract_trade(message)
+
+        assert trade.is_swap is True
+        assert trade.symbol == "USD/CAD"
+        assert trade.settlement_date == "20260728"
+        assert trade.far_settlement_date == "20270129"
+        assert trade.near_leg_price == pytest.approx(1.411799)
+        assert trade.far_leg_price == pytest.approx(1.399186)
+        assert trade.near_quantity == pytest.approx(500000.0)
+        assert trade.far_quantity == pytest.approx(500000.0)
+        assert trade.swap_points == pytest.approx(-0.012613)
+        # Explicit per-leg sides: near 624=2 (Sell USD), far 624=1 (Buy USD)
+        assert trade.near_leg_action == "Sell USD"
+        assert trade.far_leg_action == "Buy USD"
         assert trade.swap_side_source == "legs"

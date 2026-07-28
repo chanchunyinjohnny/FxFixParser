@@ -472,6 +472,26 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
         name="Competing Quotes",
         member_tags=set(range(9517, 9544)) - {9519, 9521},  # 9517–9543
     ),
+    # Competing dealer quotes (Bloomberg ORP/DOR & MAP Quote / ExecutionReport).
+    # Tag names live in the Bloomberg DOR venue overlay.
+    RepeatingGroupDefinition(
+        count_tag=10009,  # NoCompDealerQuotes
+        name="Competing Dealer Quotes",
+        member_tags={
+            10010,  # CompDealerID (entry delimiter)
+            10011,  # CompDealerQuotePrice
+            22161,  # CompDealerQuotePriceLeg2
+            22162,  # CompDealerQuoteForwardPoints
+            22163,  # CompDealerQuoteSwapPoints
+            22276,  # CompDealerQuoteType
+            22485,  # CompDealerQuoteSpotRate
+            22486,  # CompDealerQuoteTradeSide
+            22526,  # CompDealerRefID
+            22527,  # CompDealerRefIDSource
+            22565,  # CompDealerQuoteForwardPointsLeg2
+            22545,  # undocumented MAP member (see Bloomberg DOR overlay)
+        },
+    ),
     # Payment schedule (360T TI commodity Asian swaps / energy Asian options)
     RepeatingGroupDefinition(
         count_tag=7560,  # NoPaymentSchedule

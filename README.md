@@ -32,6 +32,7 @@ These cryptic tag-number pairs are hard to read without constantly referencing t
 - **FX product detection** — automatically identifies whether a message is a Spot, Forward, Swap, NDF, Futures, or Options trade
 - **Trade summary** — extracts key trade details (symbol, side, quantity, price, settlement date) at a glance
 - **Repeating group support** — correctly parses and displays nested groups like market data entries, legs, and party IDs
+- **LEI detection and lookup** — Legal Entity Identifiers found in party/regulatory fields are check-digit validated offline, and can optionally be resolved to legal entity names via the public GLEIF API
 - **Multiple output formats** — table, human-readable text, and JSON
 - **Flexible input** — accepts standard SOH delimiters, pipe (`|`) delimiters commonly found in logs, and pre-parsed FIX report text (one `(tag)Field: value` per line, as produced by some log viewers) which is reconstructed into the raw message automatically
 - **Web UI and CLI** — use whichever suits your workflow
@@ -123,6 +124,7 @@ If the venue is recognised, a **Trade Summary** appears showing the key details 
 - **Venue** — auto-detected from the SenderCompID, or you can select one manually
 - **Strict Checksum Validation** — enable to verify the FIX checksum (tag 10) is correct
 - **Strict Body Length Validation** — enable to verify the body length (tag 9) matches
+- **LEI Lookup** — when enabled, detected Legal Entity Identifiers are resolved to legal entity names via the public GLEIF API (needs internet access; off by default so the app works fully offline)
 - **Column Visibility** — toggle which columns appear in the table view
 
 ### Sample Messages
@@ -149,13 +151,13 @@ The sidebar includes built-in sample messages you can load with one click:
 |-------|-------------|
 | **Smart Trade (LiquidityFX)** | Multi-dealer FX platform with 120+ custom tags covering swap execution, tiered quotes, fixing orders, regulatory tracking, and more |
 | **Bloomberg FXGO** | Bloomberg's FX trading *platform* — the front-end where FX price discovery and execution happen |
-| **Bloomberg DOR** | Bloomberg Derivatives Order Routing — the ORP/DOR FIX *connectivity protocol* (FIXT 1.1 / FIX 5.0 SP2) that carries Bloomberg execution-facility flow; custom tags for algo execution, tenor support, and multi-leg instruments |
+| **Bloomberg DOR** | Bloomberg Derivatives Order Routing — the ORP/DOR FIX *connectivity protocol* (FIXT 1.1 / FIX 5.0 SP2) that carries Bloomberg execution-facility flow; custom tags for algo execution, tenor support, multi-leg instruments, competing dealer quotes, and regulatory trade IDs. Also covers the Bloomberg **MAP gateway** — the same ORP/DOR dialect carried over plain FIX 4.4 with `MAP_<party>` CompIDs |
 | **360T RFS (Market Taker)** | Deutsche Börse multi-bank FX RFS platform (FIX 4.4). Spot, Forward, Swap, NDF, NDS, FX Time Option and Block trades across QuoteRequest/Quote/QuoteCancel/NewOrderSingle/NewOrderMultileg/ExecutionReport/SecurityDefinition. Derives product type (no SecurityType is sent) and extracts 360T swap economics — Side relative to the base currency on the far leg, far-leg rates from 6050/6051 quotes and 6160 fills |
 | **360T TI (TradeImporter)** | 360T's post-trade STP feed (FIX 4.4). A single ExecutionReport message per filled trade; ProductType (7071) carries the product directly (FX-SPOT/FX-FWD/FX-SWAP/FX-OPTION/MM/…); competing-dealer quotes in NoCompetingQuotes (9516); swap far-leg rate in 6160. Full Trade Summary for the core FX set; all products fully tag-decoded |
 | **SGX Titan OTC** | SGX Titan OTC FIX 5.0 SP2 gateway for SGX listed FX futures (KRW/USD, USD/CNH, FlexC variants, etc.) |
 | **LSEG / Refinitiv FX Matching (MAPI)** | Anonymous interbank FX Matching central-limit-order-book; FX Spot and FX Forward Swap over FIX 5.0 SP2 / FIXT 1.1, including the forward-swap quote-negotiation messages |
 
-Venue is auto-detected from the message's component IDs — SenderCompID (tag 49), TargetCompID (tag 56), or OnBehalfOfCompID (tag 115) — so client-to-venue messages resolve too (e.g. LSEG FX Matching is recognised by the constant gateway CompID `TR MATCHING`). Bloomberg FXGO and Bloomberg DOR share the Bloomberg umbrella: a DOR/ORP message is recognised by its FIXT 1.1 / FIX 5.0 protocol markers even when it carries a generic Bloomberg CompID, so it is never mistaken for FXGO. The two 360T interfaces are handled the same way: a TradeImporter message is recognised by its `_TI` CompID, its TI ProductType values, or its NoCompetingQuotes group, so it is never mistaken for the RFS Market Taker. You can also select a venue manually from the sidebar.
+Venue is auto-detected from the message's component IDs — SenderCompID (tag 49), TargetCompID (tag 56), or OnBehalfOfCompID (tag 115) — so client-to-venue messages resolve too (e.g. LSEG FX Matching is recognised by the constant gateway CompID `TR MATCHING`). Bloomberg FXGO and Bloomberg DOR share the Bloomberg umbrella: a DOR/ORP message is recognised by its FIXT 1.1 / FIX 5.0 protocol markers even when it carries a generic Bloomberg CompID, so it is never mistaken for FXGO; MAP gateway sessions are recognised by their `MAP_BLP*` CompID (the Bloomberg side of a MAP session) even though they run plain FIX 4.4 without routing markers. The two 360T interfaces are handled the same way: a TradeImporter message is recognised by its `_TI` CompID, its TI ProductType values, or its NoCompetingQuotes group, so it is never mistaken for the RFS Market Taker. You can also select a venue manually from the sidebar.
 
 ## Supported FIX Versions
 

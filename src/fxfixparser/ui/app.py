@@ -6,9 +6,64 @@ import streamlit as st
 
 from fxfixparser.core.exceptions import ChecksumError, ParseError, ValidationError
 from fxfixparser.core.fx_math import pip_size
+from fxfixparser.core.lei import LeiLookupError, find_leis, lookup_lei
 from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.products.base import ProductRegistry
 from fxfixparser.venues.registry import VenueRegistry
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _gleif_lookup(lei: str) -> dict[str, str]:
+    """GLEIF lookup cached for an hour so re-parses don't re-query."""
+    return lookup_lei(lei)
+
+
+def _render_lei_panel(message: Any, enable_gleif: bool) -> None:
+    """Render detected LEIs with offline validation and optional GLEIF data.
+
+    Venue-universal: any venue's message may carry ISO 17442 LEIs in party
+    or regulatory fields. Network calls only happen when the user enabled
+    the GLEIF toggle in the sidebar (corporate networks may block egress).
+    """
+    leis = find_leis(message)
+    if not leis:
+        return
+
+    st.divider()
+    st.subheader("Legal Entity Identifiers")
+
+    tag_names = {f.tag: f.name for f in message.fields}
+    rows: list[dict[str, Any]] = []
+    for detected in leis:
+        rows.append(
+            {
+                "LEI": detected.lei,
+                "Found In": ", ".join(
+                    f"{tag} {tag_names.get(tag, '')}".strip() for tag in detected.source_tags
+                ),
+                "Check Digits": "Valid" if detected.checksum_ok else "Invalid",
+            }
+        )
+
+    if enable_gleif:
+        with st.spinner("Querying GLEIF for entity records..."):
+            for row, detected in zip(rows, leis):
+                try:
+                    info = _gleif_lookup(detected.lei)
+                    row["Legal Name"] = info["legal_name"]
+                    row["Entity Status"] = info["status"]
+                    row["Jurisdiction"] = info["jurisdiction"]
+                    row["City"] = info["city"]
+                except LeiLookupError as exc:
+                    row["Legal Name"] = f"Lookup failed: {exc}"
+
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+    if not enable_gleif:
+        st.caption(
+            "Enable **Look up entity names on GLEIF** in the sidebar to resolve "
+            "these identifiers to legal entity names (requires internet access)."
+        )
+
 
 SAMPLE_MESSAGES = {
     "FX Spot (Execution Report)": (
@@ -200,6 +255,42 @@ SAMPLE_MESSAGES = {
         "7653=UTI-OPT-001|"
         "453=2|448=CLIENTCO|447=D|452=1|448=BANKA.TI|447=D|452=35|10=003|"
     ),
+    "Bloomberg MAP: FX Swap Execution (competing quotes + LEIs)": (
+        "8=FIX.4.4|9=1599|35=8|34=549|49=MAP_BLP_BETA|52=20260728-04:03:54|"
+        "56=MAP_CLIENT_BETA|144=FX|6=1.411799|11=UDH781490411857645569|14=500000|"
+        "15=USD|17=3-2-871383803T-0-0|30=XOFF|31=1.411799|32=500000|"
+        "37=3-2-871383803T-0-0|38=500000|39=2|40=G|54=B|55=USD/CAD|"
+        "60=20260728-04:03:53.959|64=20260728|75=20260728|119=705899.5|120=CAD|"
+        "150=F|151=0|167=FXSWAP|194=1.41175|195=-0.012613|460=4|797=N|854=0|"
+        "1056=705899.5|1300=BTBS|2405=2|22277=0|22280=0|"
+        "453=6|"
+        "448=XOFF|447=G|452=16|"
+        "448=BCQT|447=D|452=13|"
+        "802=4|523=(TEST) BANK ONE HK LTD|803=1|523=29618590|803=2|"
+        "523=TEST TRADER|803=9|523=KNPC1X7GHDZW8U2ZSF89|803=4025|"
+        "448=29618590|447=P|452=12|2376=24|802=1|523=Y|803=4047|"
+        "448=DOR2|447=D|452=1|"
+        "802=4|523=ATF Test Bank 2|803=1|523=25424913|803=2|523=PIPE2 FXGOTEST|"
+        "803=9|523=54930035WQZLGC45RZ35|803=4025|"
+        "448=PRODUCT TYPE|447=D|452=16|802=1|523=Dealing|803=4|"
+        "448=29618590|447=D|452=11|"
+        "1903=BBG0000000000B6A682A29000C0063|1904=0|1905=254900HSS82AHMTPAD95|"
+        "1906=0|1907=2|2411=2|"
+        "555=2|"
+        "600=USD/CAD|1788=1|602=USD/CAD|603=6|607=4|609=FOR|624=2|556=USD|"
+        "687=500000|654=1|587=1|588=20260728|675=CAD|637=1.411799|1073=0.000049|"
+        "1074=705899.5|"
+        "600=USD/CAD|1788=2|602=USD/CAD|603=6|607=4|609=FXFWD|624=1|556=USD|"
+        "687=500000|654=2|587=BROKEN|588=20270129|675=CAD|637=1.399186|"
+        "1073=-0.012564|1074=699593|"
+        "768=2|769=20260728-04:03:53.959|770=1|769=20260728-04:03:49.000|770=10|"
+        "10009=2|"
+        "10010=MidRate|10011=1.411905|22161=1.3992045|22162=0.000055|"
+        "22163=-0.0126455|22276=0|22485=1.41185|22486=0|22545=0|"
+        "10010=RefRate|10011=1.4119|22161=1.399286|22162=0.00005|22163=-0.012564|"
+        "22276=0|22485=1.41185|22486=0|22545=0|"
+        "22078=1|22079=1.411799|22080=20|22081=12|10=017|"
+    ),
 }
 
 
@@ -337,6 +428,20 @@ def main() -> None:
         )
 
         st.divider()
+        st.header("LEI Lookup")
+        enable_gleif = st.checkbox(
+            "Look up entity names on GLEIF",
+            value=False,
+            help=(
+                "When a parsed message contains Legal Entity Identifiers, "
+                "query the public GLEIF API (api.gleif.org) for the entity's "
+                "legal name and status. Requires internet access; results "
+                "are cached for an hour. Detected LEIs are always shown and "
+                "check-digit validated offline, even when this is off."
+            ),
+        )
+
+        st.divider()
         st.header("Table Columns")
         show_tag = st.checkbox("Tag", value=True)
         show_field = st.checkbox("Field", value=True)
@@ -466,6 +571,10 @@ def main() -> None:
             with tab3:
                 st.subheader("JSON Output")
                 st.json(message.to_dict())
+
+            # LEI panel — venue-universal, offline unless the sidebar
+            # GLEIF toggle is on.
+            _render_lei_panel(message, enable_gleif)
 
             # Trade / Quote summary — only rendered for economic messages.
             # Administrative messages (SecurityDefinition 35=d,

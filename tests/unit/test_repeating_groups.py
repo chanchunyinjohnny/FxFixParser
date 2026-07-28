@@ -89,6 +89,25 @@ class TestRepeatingGroupDefinitions:
         assert 9519 not in group.member_tags
         assert 9521 not in group.member_tags
 
+    def test_bloomberg_comp_dealer_quotes_group_defined(self) -> None:
+        """Bloomberg ORP/DOR & MAP CompDealerQuoteGrp (10009)."""
+        group = get_group_definition(10009)
+        assert group is not None
+        assert group.name == "Competing Dealer Quotes"
+        assert 10010 in group.member_tags  # CompDealerID
+        assert 10011 in group.member_tags  # CompDealerQuotePrice
+        assert 22161 in group.member_tags  # CompDealerQuotePriceLeg2
+        assert 22162 in group.member_tags  # CompDealerQuoteForwardPoints
+        assert 22163 in group.member_tags  # CompDealerQuoteSwapPoints
+        assert 22276 in group.member_tags  # CompDealerQuoteType
+        assert 22485 in group.member_tags  # CompDealerQuoteSpotRate
+        assert 22486 in group.member_tags  # CompDealerQuoteTradeSide
+        assert 22526 in group.member_tags  # CompDealerRefID
+        assert 22527 in group.member_tags  # CompDealerRefIDSource
+        assert 22565 in group.member_tags  # CompDealerQuoteForwardPointsLeg2
+        # Undocumented MAP wire member — kept so entries don't split.
+        assert 22545 in group.member_tags
+
     def test_360t_ti_security_alt_id_group_defined(self) -> None:
         group = get_group_definition(454)
         assert group is not None

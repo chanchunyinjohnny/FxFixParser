@@ -30,6 +30,11 @@ _BLOOMBERG_COMP_IDS = {
 # for ORP/DOR order routing.
 _DOR_ROUTING_IDS = {"DOR", "FXOM", "ORP", "BLOOMBERG_DOR", "BBGDOR"}
 
+# Bloomberg MAP gateway sessions carry the ORP/DOR dialect over plain FIX 4.4
+# with MAP_<party>[_<env>] CompIDs. The Bloomberg-side CompID always starts
+# with MAP_BLP (BLP = Bloomberg L.P.), e.g. MAP_BLP_BETA in UAT.
+_MAP_BLOOMBERG_PREFIX = "MAP_BLP"
+
 # Bloomberg DOR custom tag definitions for FX-specific fields.
 # Standard FIX tags (e.g. 8, 35, 55, 167) are covered by FIX44.xml.
 _BLOOMBERG_CUSTOM_TAGS: dict[int, FixFieldDefinition] = {
@@ -218,6 +223,194 @@ _BLOOMBERG_CUSTOM_TAGS: dict[int, FixFieldDefinition] = {
             "XOFF": "Off Facility",
         },
     ),
+    1788: FixFieldDefinition(
+        tag=1788,
+        name="LegID",
+        field_type="STRING",
+        description=(
+            "Reference identifier for the leg, referred to by "
+            "RegulatoryLegRefID (2411) and AllocLegRefID (2727). For FX "
+            "swaps this is an ordinal: 1 = near leg, 2 = far leg."
+        ),
+    ),
+    # Regulatory trade IDs (NoRegulatoryTradeIDs group + the flat package-level
+    # copies MAP execution reports emit before the 1907 count).
+    1903: FixFieldDefinition(
+        tag=1903,
+        name="RegulatoryTradeID",
+        field_type="STRING",
+        description=(
+            "Regulatory trade identifier (UTI / USI / TVTIC) assigned to "
+            "the trade or to an individual leg."
+        ),
+    ),
+    1905: FixFieldDefinition(
+        tag=1905,
+        name="RegulatoryTradeIDSource",
+        field_type="STRING",
+        description=("Identifier (LEI) of the entity that generated the regulatory " "trade ID."),
+    ),
+    1906: FixFieldDefinition(
+        tag=1906,
+        name="RegulatoryTradeIDType",
+        field_type="INT",
+        description="The type of regulatory trade ID being reported.",
+        valid_values={
+            "0": "Current (default if not specified)",
+            "1": "Previous (cleared trade / novation)",
+            "2": "Block (when reporting an allocated subtrade)",
+            "3": "Related (when reporting a mixed swap)",
+            "5": "Trading venue transaction identifier (MiFID II TVTIC)",
+            "6": "Report tracking number (EMIR Refit RTN)",
+        },
+    ),
+    1907: FixFieldDefinition(
+        tag=1907,
+        name="NoRegulatoryTradeIDs",
+        field_type="NUMINGROUP",
+        description="Number of regulatory trade ID entries.",
+    ),
+    2411: FixFieldDefinition(
+        tag=2411,
+        name="RegulatoryLegRefID",
+        field_type="STRING",
+        description=(
+            "For multi-leg trades sent as a single message: marks the "
+            "regulatory trade ID entry as applying only to the leg whose "
+            "LegID (1788) matches (1 = near leg, 2 = far leg)."
+        ),
+    ),
+    2405: FixFieldDefinition(
+        tag=2405,
+        name="ExecMethod",
+        field_type="INT",
+        description="How the trade was executed.",
+        valid_values={
+            "0": "Unspecified",
+            "1": "Manual",
+            "2": "Automated",
+            "3": "Voice brokered",
+            "4000": "Process negotiated trade (Bloomberg PNT)",
+        },
+    ),
+    22280: FixFieldDefinition(
+        tag=22280,
+        name="AllocationCount",
+        field_type="INT",
+        description="Count of trade allocations expected.",
+    ),
+    # Competing dealer quotes — CompDealerQuoteGrp (10009). On MAP execution
+    # reports the group also carries reference-rate pseudo-dealers (e.g.
+    # CompDealerID "MidRate" / "RefRate") with indicative quote type.
+    10009: FixFieldDefinition(
+        tag=10009,
+        name="NoCompDealerQuotes",
+        field_type="NUMINGROUP",
+        description=("Number of competing/participating dealer quote entries being " "specified."),
+    ),
+    10010: FixFieldDefinition(
+        tag=10010,
+        name="CompDealerID",
+        field_type="STRING",
+        description="Dealer's Bloomberg broker code.",
+    ),
+    # Overrides the LFX 'IsSEFTrade' meaning of 10011 for Bloomberg messages.
+    10011: FixFieldDefinition(
+        tag=10011,
+        name="CompDealerQuotePrice",
+        field_type="PRICE",
+        description=(
+            "Dealer's quoted price; omitted if the dealer did not quote. "
+            "For FX swaps: the near leg all-in swap price."
+        ),
+    ),
+    22161: FixFieldDefinition(
+        tag=22161,
+        name="CompDealerQuotePriceLeg2",
+        field_type="PRICE",
+        description="For FX swaps: dealer's all-in quoted price for the far leg.",
+    ),
+    22162: FixFieldDefinition(
+        tag=22162,
+        name="CompDealerQuoteForwardPoints",
+        field_type="PRICEOFFSET",
+        description=(
+            "Dealer's forward points for the quoted price (near leg for FX "
+            "swaps), in decimal form (61.99 points = 0.006199); may be "
+            "negative."
+        ),
+    ),
+    22163: FixFieldDefinition(
+        tag=22163,
+        name="CompDealerQuoteSwapPoints",
+        field_type="PRICEOFFSET",
+        description="For FX swaps: dealer's quoted swap points, in decimal form.",
+    ),
+    22276: FixFieldDefinition(
+        tag=22276,
+        name="CompDealerQuoteType",
+        field_type="INT",
+        description="Competing dealer's quote type.",
+        valid_values={
+            "0": "Indicative (Bloomberg provided)",
+            "1": "Executable (counterparty quoted)",
+        },
+    ),
+    22485: FixFieldDefinition(
+        tag=22485,
+        name="CompDealerQuoteSpotRate",
+        field_type="PRICE",
+        description=(
+            "Dealer's spot rate factored into the all-in rate shown in "
+            "CompDealerQuotePrice (10011)."
+        ),
+    ),
+    22486: FixFieldDefinition(
+        tag=22486,
+        name="CompDealerQuoteTradeSide",
+        field_type="INT",
+        description=(
+            "Which trade side the competing dealer's price applies to when "
+            "the quote was two-sided."
+        ),
+        valid_values={
+            "0": "Traded side (default)",
+            "1": "Non-traded side",
+        },
+    ),
+    22526: FixFieldDefinition(
+        tag=22526,
+        name="CompDealerRefID",
+        field_type="STRING",
+        description="ID reference of the competing dealer's quote or order.",
+    ),
+    22527: FixFieldDefinition(
+        tag=22527,
+        name="CompDealerRefIDSource",
+        field_type="INT",
+        description="What identifier is referenced in CompDealerRefID (22526).",
+        valid_values={
+            "1": "QuoteID (117)",
+        },
+    ),
+    22565: FixFieldDefinition(
+        tag=22565,
+        name="CompDealerQuoteForwardPointsLeg2",
+        field_type="PRICEOFFSET",
+        description=("For FX swaps: dealer's far leg forward points, in decimal form."),
+    ),
+    # Observed inside CompDealerQuoteGrp entries on MAP execution reports but
+    # not defined in the ORP 1.9.8 spec — kept as a group member so entry
+    # detection stays intact. Rename once a newer Bloomberg spec names it.
+    22545: FixFieldDefinition(
+        tag=22545,
+        name="CompDealerQuoteField22545",
+        field_type="STRING",
+        description=(
+            "Undocumented CompDealerQuoteGrp member (not in the ORP 1.9.8 "
+            "specification; observed on Bloomberg MAP execution reports)."
+        ),
+    ),
 }
 
 
@@ -241,10 +434,13 @@ class BloombergDORHandler(VenueHandler):
     def enum_extensions(self) -> dict[int, dict[str, str]]:
         """Bloomberg-specific enum codes that extend standard FIX fields."""
         return {
-            # PartySubIDType: Bloomberg ORP/DOR uses code 4025 to indicate the
-            # PartySubID carries an ISO 17442 Legal Entity Identifier (LEI).
+            # PartySubIDType: Bloomberg ORP/DOR private codes — 4025 marks a
+            # PartySubID carrying an ISO 17442 Legal Entity Identifier (LEI);
+            # 4046/4047 flag the party's liquidity role (Y/N PartySubID).
             803: {
                 "4025": "Legal Entity Identifier",
+                "4046": "Liquidity maker",
+                "4047": "Liquidity taker",
             },
         }
 
@@ -254,9 +450,15 @@ class BloombergDORHandler(VenueHandler):
         not mis-detected as Bloomberg FXGO.
 
         Requires BOTH a Bloomberg CompID and a DOR/ORP protocol marker, so the
-        claim can never steal another venue's FIXT.1.1 traffic.
+        claim can never steal another venue's FIXT.1.1 traffic. MAP gateway
+        sessions are the exception: a MAP_BLP* CompID is Bloomberg-specific on
+        its own, and MAP traffic is plain FIX 4.4 with none of the FIXT / 115 /
+        128 markers.
         """
         comp_ids = {(message.get_value(tag) or "").upper() for tag in (49, 56, 115, 128)}
+        # Bloomberg MAP gateway (FIX 4.4 flavor of the ORP/DOR dialect).
+        if any(cid.startswith(_MAP_BLOOMBERG_PREFIX) for cid in comp_ids):
+            return True
         if comp_ids.isdisjoint(_BLOOMBERG_COMP_IDS):
             return False
         # DOR/ORP routing markers on OnBehalfOfCompID (115) / DeliverToCompID (128).
