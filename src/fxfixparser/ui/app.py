@@ -6,7 +6,7 @@ import streamlit as st
 
 from fxfixparser.core.exceptions import ChecksumError, ParseError, ValidationError
 from fxfixparser.core.fx_math import pip_size
-from fxfixparser.core.lei import LeiLookupError, find_leis, lookup_lei
+from fxfixparser.core.lei import LEI_BEARING_TAGS, LeiLookupError, find_leis, lookup_lei
 from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.products.base import ProductRegistry
 from fxfixparser.venues.registry import VenueRegistry
@@ -16,6 +16,43 @@ from fxfixparser.venues.registry import VenueRegistry
 def _gleif_lookup(lei: str) -> dict[str, str]:
     """GLEIF lookup cached for an hour so re-parses don't re-query."""
     return lookup_lei(lei)
+
+
+def _lei_value_annotations(message: Any, enable_gleif: bool) -> dict[str, str]:
+    """Map each detected LEI to the decoded text shown beside its raw value.
+
+    Offline (always): the ISO 7064 check-digit verdict. With the GLEIF
+    toggle on: the resolved legal entity name, falling back to the offline
+    verdict when a lookup fails (the LEI panel shows the error detail).
+    """
+    detected_leis = find_leis(message)
+    annotations = {
+        d.lei: ("LEI (check digits valid)" if d.checksum_ok else "LEI (check digits invalid)")
+        for d in detected_leis
+    }
+    if enable_gleif and detected_leis:
+        with st.spinner("Querying GLEIF for entity records..."):
+            for detected in detected_leis:
+                try:
+                    name = _gleif_lookup(detected.lei)["legal_name"]
+                except LeiLookupError:
+                    continue
+                if name:
+                    annotations[detected.lei] = name
+    return annotations
+
+
+def _value_description(field: Any, lei_notes: dict[str, str]) -> str:
+    """Decoded-value column text: enum decode first, else LEI annotation.
+
+    Keeps raw and parsed values side by side for LEIs the same way coded
+    values like 54=1 decode to "Buy".
+    """
+    if field.value_description:
+        return str(field.value_description)
+    if field.tag in LEI_BEARING_TAGS:
+        return lei_notes.get((field.raw_value or "").strip(), "")
+    return ""
 
 
 def _render_lei_panel(message: Any, enable_gleif: bool) -> None:
@@ -403,7 +440,12 @@ def main() -> None:
     )
 
     st.title("FX FIX Message Parser")
-    st.markdown("Parse FIX protocol messages for FX trading")
+    st.markdown(
+        "Parse FIX protocol messages for FX trading — venue-aware tag "
+        "decoding, trade summaries, and **LEI detection with optional GLEIF "
+        "entity lookup** (raw identifier and resolved legal name side by "
+        "side; enable it in the sidebar)."
+    )
 
     # Get available venues
     venue_registry = VenueRegistry.default()
@@ -495,6 +537,10 @@ def main() -> None:
 
             st.success("Message parsed successfully!")
 
+            # Decoded-value annotations for LEIs: legal names when the
+            # GLEIF toggle is on, offline check-digit verdicts otherwise.
+            lei_notes = _lei_value_annotations(message, enable_gleif)
+
             # Display tabs for different output formats
             tab1, tab2, tab3 = st.tabs(["Table View", "Human Readable", "JSON"])
 
@@ -519,7 +565,7 @@ def main() -> None:
                         if show_value:
                             row["Value"] = field.raw_value
                         if show_value_desc:
-                            row["Value Description"] = field.value_description or ""
+                            row["Value Description"] = _value_description(field, lei_notes)
                         table_data.append(row)
 
                 if table_data:
@@ -552,8 +598,8 @@ def main() -> None:
                                     if show_value:
                                         entry_row["Value"] = field.raw_value
                                     if show_value_desc:
-                                        entry_row["Value Description"] = (
-                                            field.value_description or ""
+                                        entry_row["Value Description"] = _value_description(
+                                            field, lei_notes
                                         )
                                     entry_data.append(entry_row)
 

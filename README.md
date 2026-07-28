@@ -127,6 +127,17 @@ If the venue is recognised, a **Trade Summary** appears showing the key details 
 - **LEI Lookup** — when enabled, detected Legal Entity Identifiers are resolved to legal entity names via the public GLEIF API (needs internet access; off by default so the app works fully offline)
 - **Column Visibility** — toggle which columns appear in the table view
 
+### LEI Detection & GLEIF Lookup
+
+FIX messages routinely carry ISO 17442 **Legal Entity Identifiers** — in party fields (PartyID 448, PartySubID 523, SettlPartySubID 785, RootPartySubID 1121) or as the UTI generator in RegulatoryTradeIDSource (1905). FxFixParser handles them in two layers:
+
+- **Offline detection & validation (always on):** every LEI-shaped value is detected and its ISO 7064 MOD 97-10 check digits are verified — no network involved. Detected LEIs appear in a dedicated **Legal Entity Identifiers** panel below the parsed output, showing which tags each one was found in and whether its check digits are valid.
+- **GLEIF lookup (opt-in):** flip **Look up entity names on GLEIF** in the sidebar and each detected LEI is resolved against the public [GLEIF API](https://www.gleif.org/en/lei-data/gleif-api) — no API key required. The legal name, entity status, jurisdiction and city are added to the panel, and the **Table View shows the raw identifier and the resolved legal name side by side**: the name appears in the Value Description column next to the raw LEI, exactly the way coded values like `54=1` decode to "Buy". With the toggle off, the same column shows the offline check-digit verdict instead.
+
+Lookups are cached for an hour, and failures (no internet, unknown LEI) fall back per-row to the offline view — so the app keeps working on restricted networks.
+
+Example: `523=54930035WQZLGC45RZ35` displays as raw value `54930035WQZLGC45RZ35` with parsed value "The Monetary Authority of Singapore".
+
 ### Sample Messages
 
 The sidebar includes built-in sample messages you can load with one click:
