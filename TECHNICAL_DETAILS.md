@@ -135,8 +135,11 @@ src/fxfixparser/
 │   ├── smart_trade.py     # LiquidityFX (123 custom tags)
 │   ├── fxgo.py            # Bloomberg FXGO
 │   ├── three_sixty_t.py   # 360T RFS (Market Taker)
+│   ├── three_sixty_t_sun.py # 360T SUN (Swap User Network order book)
 │   ├── three_sixty_t_ti.py # 360T TI (TradeImporter)
-│   └── bloomberg_dor.py   # Bloomberg DOR (47 custom tags)
+│   ├── bloomberg_dor.py   # Bloomberg DOR (47 custom tags)
+│   ├── sgx_titan_otc.py   # SGX Titan OTC (FX futures)
+│   └── lseg_fx_matching.py # LSEG / Refinitiv FX Matching (MAPI)
 ├── tags/                  # Tag dictionaries
 │   ├── dictionary.py      # TagDictionary manager
 │   ├── fix44.py           # Curated FIX 4.4 tag definitions
@@ -179,7 +182,10 @@ Products are checked in order of specificity (most specific first):
 | Bloomberg FXGO | `FXGO`, `BLOOMBERG`, `BBG`, `BFXGO` |
 | Bloomberg DOR | `BLOOMBERG_DOR`, `BBGDOR`, `DOR`, `FXOM`, `ORP` |
 | 360T RFS | `360T`, `THREESIXTYT`, `360TGTX` |
+| 360T SUN | `360T_SUN`, `360TSUN`, `SUN`, plus any CompID ending `_SUN` |
 | 360T TI | `360T_TI` |
+| SGX Titan OTC | `TITANOTC`, `SGX-OTC`, `SGXTITAN`, `SGX_TITAN_OTC` |
+| LSEG FX Matching | `TR MATCHING`, `TRMATCHING`, `TR_MATCHING` |
 
 > Detection is two-pass. **Bloomberg DOR** first claims any message carrying a
 > Bloomberg CompID **and** an ORP/DOR protocol marker (FIXT 1.1 BeginString,
@@ -187,7 +193,42 @@ Products are checked in order of specificity (most specific first):
 > type AI/AG). **360T TI** likewise claims any ExecutionReport (35=8) carrying a
 > TI marker — a `360T_TI` CompID, a TI ProductType value (FX-SPOT/FX-FWD/…), or a
 > NoCompetingQuotes (9516) group — so it is never mistaken for the RFS Market
-> Taker. Otherwise the CompID table above applies.
+> Taker. **360T SUN** claims a message carrying a SUN-only tag (LastNearLegPx
+> 9630, LeavesQty2 6164, UnevenSwapAllowed 9822, …), a PartyRiskLimitCheck
+> message type (DF/DG), an `EMSO-` fill identifier in SecondaryExecID(527) /
+> RefOrderID(1080), or ProductType `FX-NDS`; it is registered ahead of TI so
+> that a SUN swap — which also carries ProductType `FX-SWAP` — resolves to SUN.
+> Otherwise the CompID table above applies.
+
+## Swap Quote Economics
+
+For a two-sided FX swap Quote (35=S) that carries per-leg all-in rates in the
+NoLegs (555) group — Bloomberg DOR's shape, with LegBidPx (681) / LegOfferPx
+(684) per leg plus flat BidSpotRate (188) / OfferSpotRate (190) — the parser
+derives the swap points itself instead of trusting the venue's forward-point
+fields:
+
+```
+bid swap points  = far LegBidPx (681)   − near LegBidPx (681)
+offer swap points = far LegOfferPx (684) − near LegOfferPx (684)
+```
+
+This is the spec definition of swap points (Bloomberg ORP/DOR defines
+LastSwapPoints (1071) as "the differential between the far leg's bid/offer and
+the near leg's bid/offer"). `ParsedTrade.swap_points_source` records whether
+the figure was `"computed"` this way or `"declared"` via explicit
+BidSwapPoints (1065) / OfferSwapPoints (1066) tags, which win when present.
+
+The venue's declared per-leg forward points — LegBidForwardPoints (1067) /
+LegOfferForwardPoints (1068) — are extracted verbatim but never feed the
+swap-point figure, because their units cannot be trusted: the ORP spec
+requires the unscaled decimal form (8 pips on EUR/USD sent as `0.0008`), yet
+feeds are routinely observed sending market-convention pips (`8`) instead.
+`fx_math.classify_forward_points()` compares each declared value against the
+offset implied by the venue's own all-in and spot rates (`all-in − spot`)
+under both readings and reports which convention it matches — or that it
+matches neither, i.e. the venue's forward points disagree with its own rates.
+The UI surfaces this as the **Forward Point Check** table on swap quotes.
 
 ## Common FIX Tags Reference
 

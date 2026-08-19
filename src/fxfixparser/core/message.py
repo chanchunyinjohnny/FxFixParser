@@ -384,6 +384,10 @@ class ParsedTrade:
     # tag (54) and the trade currency convention; "legs" when each leg
     # carries an explicit LegSide (624) — Bloomberg DOR's shape.
     swap_side_source: str | None = None
+    # For swap quotes: "declared" when bid/offer swap points came from
+    # explicit tags (1065/1066); "computed" when derived as the
+    # far-minus-near all-in differential per side (venue spec definition).
+    swap_points_source: str | None = None
 
     # Message type indicator
     is_quote: bool = False
@@ -427,6 +431,11 @@ class ParsedTrade:
                     "far_offer_fwd_points": self.far_offer_fwd_points,
                     "bid_swap_points": self.bid_swap_points,
                     "offer_swap_points": self.offer_swap_points,
+                    "swap_points_source": self.swap_points_source,
+                    "near_leg_bid_rate": self.near_leg_bid_rate,
+                    "near_leg_offer_rate": self.near_leg_offer_rate,
+                    "far_leg_bid_rate": self.far_leg_bid_rate,
+                    "far_leg_offer_rate": self.far_leg_offer_rate,
                     "base_currency": self.base_currency,
                     "term_currency": self.term_currency,
                     "trade_currency": self.trade_currency,

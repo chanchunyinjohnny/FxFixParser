@@ -45,6 +45,10 @@ def _order_legs_near_far(
     if all(d for d, _, _ in dated):
         # All have dates — sort by date, tie-break by original index
         dated.sort(key=lambda t: (t[0], t[1]))
+    elif all((leg.get("1788") or "").isdigit() for leg in legs):
+        # No settlement dates — fall back to the LegID (1788) ordinal
+        # (Bloomberg DOR quotes: 1 = near leg, 2 = far leg).
+        dated.sort(key=lambda t: (int(t[2]["1788"]), t[1]))
     else:
         dated.sort(key=lambda t: t[1])
     return dated[0][2], dated[-1][2]
@@ -335,9 +339,11 @@ class VenueHandler(ABC):
             except ValueError:
                 pass
 
-        # Check if this is a swap (has far leg settlement date)
+        # Check if this is a swap: flat far-leg settlement date (193) or a
+        # NoLegs (555) group carrying two legs (Bloomberg DOR quote shape).
         far_settl_date = message.get_value(193)
-        if far_settl_date:
+        leg_entries = _extract_leg_entries(message)
+        if far_settl_date or len(leg_entries) >= 2:
             trade.is_swap = True
             trade.far_settlement_date = far_settl_date
 
@@ -395,12 +401,43 @@ class VenueHandler(ABC):
                 except ValueError:
                     pass
 
-        # Set display values
-        if trade.bid_price and trade.offer_price:
+            # Per-leg quote shape (Bloomberg DOR): all-in rates and forward
+            # points ride inside the NoLegs (555) group instead of flat tags.
+            if len(leg_entries) >= 2:
+                self._merge_swap_quote_legs(trade, leg_entries)
+
+            # Swap points. Explicit tags (1065/1066) win when the venue sends
+            # them; otherwise compute per the venue-spec definition (Bloomberg
+            # ORP/DOR LastSwapPoints): the differential between the far leg's
+            # bid/offer and the near leg's bid/offer, from the all-in rates.
+            # The declared per-leg forward points are deliberately NOT used —
+            # feeds have been observed sending them in pips rather than the
+            # unscaled decimal form the spec requires.
+            if trade.bid_swap_points is not None or trade.offer_swap_points is not None:
+                trade.swap_points_source = "declared"
+            else:
+                if trade.far_leg_bid_rate is not None and trade.near_leg_bid_rate is not None:
+                    trade.bid_swap_points = trade.far_leg_bid_rate - trade.near_leg_bid_rate
+                if trade.far_leg_offer_rate is not None and trade.near_leg_offer_rate is not None:
+                    trade.offer_swap_points = trade.far_leg_offer_rate - trade.near_leg_offer_rate
+                if trade.bid_swap_points is not None or trade.offer_swap_points is not None:
+                    trade.swap_points_source = "computed"
+
+            # Pair/pip context so swap-quote consumers can convert to pips.
+            base, term = parse_symbol(trade.symbol)
+            trade.base_currency = base
+            trade.term_currency = term
+            trade.pip_size = pip_size(trade.symbol)
+
+        # Set display values. A side is "present" when either the flat
+        # bid/offer price or any leg-level bid/offer all-in rate is quoted.
+        has_bid = trade.bid_price is not None or trade.near_leg_bid_rate is not None
+        has_offer = trade.offer_price is not None or trade.near_leg_offer_rate is not None
+        if has_bid and has_offer:
             trade.side = "Two-Way"
-        elif trade.bid_price:
+        elif has_bid:
             trade.side = "Bid Only"
-        elif trade.offer_price:
+        elif has_offer:
             trade.side = "Offer Only"
 
         # Use mid price for single price display
@@ -410,6 +447,45 @@ class VenueHandler(ABC):
             trade.price = trade.bid_price
         elif trade.offer_price:
             trade.price = trade.offer_price
+
+    @staticmethod
+    def _merge_swap_quote_legs(trade: ParsedTrade, leg_entries: list[dict[str, str]]) -> None:
+        """Merge per-leg quote data (NoLegs shape) into a swap quote.
+
+        Flat/custom tags already extracted take precedence; the legs fill
+        whatever is still missing. Leg tags: LegBidPx (681) / LegOfferPx
+        (684) all-in rates, LegBidForwardPoints (1067) / LegOfferForwardPoints
+        (1068) declared points, LegOrderQty (685) amounts, LegSettlDate (588).
+        """
+        near, far = _order_legs_near_far(leg_entries)
+        trade.settlement_date = trade.settlement_date or near.get("588")
+        trade.far_settlement_date = trade.far_settlement_date or far.get("588")
+
+        if trade.near_leg_bid_rate is None:
+            trade.near_leg_bid_rate = _to_float(near.get("681"))
+        if trade.near_leg_offer_rate is None:
+            trade.near_leg_offer_rate = _to_float(near.get("684"))
+        if trade.far_leg_bid_rate is None:
+            trade.far_leg_bid_rate = _to_float(far.get("681"))
+        if trade.far_leg_offer_rate is None:
+            trade.far_leg_offer_rate = _to_float(far.get("684"))
+
+        # Declared forward points as sent by the venue (units unverified —
+        # see classify_forward_points). Near leg maps onto the flat
+        # 189/191 slots, far leg onto the far-leg slots.
+        if trade.bid_fwd_points is None:
+            trade.bid_fwd_points = _to_float(near.get("1067"))
+        if trade.offer_fwd_points is None:
+            trade.offer_fwd_points = _to_float(near.get("1068"))
+        if trade.far_bid_fwd_points is None:
+            trade.far_bid_fwd_points = _to_float(far.get("1067"))
+        if trade.far_offer_fwd_points is None:
+            trade.far_offer_fwd_points = _to_float(far.get("1068"))
+
+        trade.near_quantity = _to_float(near.get("685") or near.get("687"))
+        trade.far_quantity = _to_float(far.get("685") or far.get("687"))
+        if trade.quantity is None:
+            trade.quantity = trade.near_quantity
 
     def _extract_quote_request_info(self, message: FixMessage, trade: ParsedTrade) -> None:
         """Extract info from Quote Request messages (35=R)."""

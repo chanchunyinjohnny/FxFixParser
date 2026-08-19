@@ -305,6 +305,28 @@ BLOOMBERG_DOR_SWAP_QUOTE_RESPONSE = (
     "10=000|"
 )
 
+# Bloomberg DOR FX Swap Quote (35=S) — TWO-SIDED dealer response. Each leg
+# carries all-in bid/offer rates (681/684) AND declared forward points
+# (1067/1068); package-level bid/offer spot rates ride flat (188/190). The
+# feed sends 1067/1068 in market-convention pips (-8.62) rather than the
+# unscaled decimal form the ORP spec asks for (-0.0862), so swap points must
+# be computed from the all-in leg rates: bid = far 681 - near 681, offer =
+# far 684 - near 684 (the spec's far-minus-near differential per side).
+BLOOMBERG_DOR_SWAP_QUOTE_TWO_SIDED = (
+    "8=FIXT.1.1|9=0522|35=S|49=BLPORPBETA|56=ORP_BCQT_B|34=6034|"
+    "115=DOR|128=DOR|52=20260819-09:26:52.048734|"
+    "1128=9|1129=1.8|1156=208|"
+    "131=REQ_789544212132925440|117=874254121-DOR2-2|537=1|"
+    "453=2|448=33518509|447=D|452=11|448=DOR2|447=D|452=1|"
+    "55=USD/JPY|460=4|167=FXSWAP|15=USD|"
+    "555=2|"
+    "600=USD/JPY|1788=1|607=4|556=USD|685=1000000|2346=0|"
+    "681=159.0938|684=159.0945|1067=-8.62|1068=-8.55|"
+    "600=USD/JPY|1788=2|607=4|556=USD|685=1000000|2346=0|"
+    "681=158.9688|684=158.9680|1067=-21.12|1068=-21.20|"
+    "188=159.18|190=159.18|60=20260819-09:26:52.034|40=1|1300=BTBS|10=137|"
+)
+
 # Bloomberg DOR FX Spot quote-request reject (35=AG).
 # Reject is sent back when a quote request fails dealer-side checks. Mirrors
 # the real ORP wire shape: NoPartyIDs (453) sits inside the NoRelatedSym (146)
@@ -736,6 +758,192 @@ THREE_SIXTY_T_ALL_SAMPLES = (
     THREE_SIXTY_T_SECURITY_DEFINITION,
     THREE_SIXTY_T_QUOTE_CANCEL,
     THREE_SIXTY_T_SWAP_EXEC_REGULATORY,
+)
+
+# ---------------------------------------------------------------------------
+# 360T SUN (Swap User Network) — the anonymous FX Swap limit order book, run as
+# a 360T MTF. FIX 5.0 SP2 (1128=9) over FIXT 1.1. Every instrument is two-legged
+# (FX Swap / NDS / EFP) and priced in swap points: Price(44) / LastPx(31) carry
+# the points, the executed all-in rates ride in LastNearLegPx(9630) /
+# LastFarLegPx(9631) — or LastPx(31) / LastPx2(6160) on the 'Trade Export'
+# ExecutionReport. CompIDs, accounts and counterparties below are placeholders;
+# body length (9) and checksum (10) are placeholders, so tests parse with
+# strict_checksum=False. Synthesized from the message tables in the SUN FIX
+# Rules of Engagement; no proprietary content reproduced.
+# ---------------------------------------------------------------------------
+
+# SecurityDefinition (35=d) — the financial calendar: supported tenor pairs with
+# near (542) and far (9612) value dates, plus the NDS fixing dates (9823/9824).
+SUN_SECURITY_DEFINITION = (
+    "8=FIXT.1.1|9=0|35=d|34=2|49=360T_SUN|56=ACME_SUN|"
+    "52=20260604-07:00:00.000|1128=9|"
+    "320=SDR-1|322=SD-1|323=4|62=20260604-14:00:00.000|711=3|"
+    "311=EUR/USD|309=SP-1W|542=20260608|9612=20260615|"
+    "311=EUR/USD|309=SP-1M|542=20260608|9612=20260708|"
+    "311=EUR/USD|309=1M-3M|542=20260708|9612=20260908|10=000|"
+)
+
+# NewOrderSingle (35=D) — a limit FX Swap order: near/far value dates 64/193,
+# limit price in swap points (44), minimum clip size 110/1822, spot-sensitivity
+# adjustment 9820 and the two order-eligibility flags 9821/9822.
+SUN_SWAP_NEW_ORDER_SINGLE = (
+    "8=FIXT.1.1|9=0|35=D|34=3|49=ACME_SUN|56=360T_SUN|"
+    "52=20260604-08:00:00.000|1128=9|"
+    "11=CL-SUN-1|"
+    "453=2|448=ACME-ALGO-1|447=D|452=122|2376=22|"
+    "448=ACMEUSER1|447=P|452=12|2376=24|"
+    "1=ACME|64=20260608|110=250000|1822=2|55=EUR/USD|54=1|"
+    "60=20260604-08:00:00.000|38=10000000|40=2|44=12.34|15=EUR|59=0|"
+    "193=20260708|2593=1|2594=2|2595=Y|9752=7|9820=25|9821=N|9822=N|10=000|"
+)
+
+# ExecutionReport (35=8) — order accepted (ExecType/OrdStatus = New). No fill
+# yet: LastQty(32) is absent, SecondaryExecID(527) is 0, and the far-leg open
+# quantity mirrors the near leg in LeavesQty2(6164).
+SUN_SWAP_ORDER_ACK = (
+    "8=FIXT.1.1|9=0|35=8|34=4|49=360T_SUN|56=ACME_SUN|"
+    "52=20260604-08:00:00.120|1128=9|"
+    "1=ACME|6=0|11=CL-SUN-1|14=0|15=EUR|17=EX-SUN-1|37=EMSO-6565101|"
+    "38=10000000|39=0|40=2|44=12.34|54=1|55=EUR/USD|59=0|"
+    "60=20260604-08:00:00.000|64=20260608|150=0|151=10000000|193=20260708|"
+    "527=0|6164=10000000|6165=0|9752=7|10=000|"
+)
+
+# ExecutionReport (35=8) — partial fill (ExecType Trade). Executed all-in rates
+# in 9630/9631, executed notionals in LastQty(32) / LastQty2(9617), the opposite
+# (quoted-currency) amounts in 9611/9618, and the matched counterparty in the
+# NoPartyIDs group as Contra Firm (452=17).
+SUN_SWAP_EXECUTION_FILL = (
+    "8=FIXT.1.1|9=0|35=8|34=5|49=360T_SUN|56=ACME_SUN|"
+    "52=20260604-08:03:11.400|1128=9|"
+    "1=ACME|6=0|11=CL-SUN-1|14=4000000|15=EUR|17=EX-SUN-2|31=12.34|32=4000000|"
+    "37=EMSO-6565101|38=10000000|39=1|40=2|44=12.34|54=1|55=EUR/USD|59=0|"
+    "1057=Y|60=20260604-08:03:11.380|64=20260608|150=F|151=6000000|"
+    "192=4000000|193=20260708|194=1.08380|527=EMSO-6565116|"
+    "453=1|448=CONTRA_BANK|447=D|452=17|"
+    "2593=1|2594=2|2595=Y|"
+    "6164=6000000|6165=4000000|9611=4335200|9617=4000000|9618=4340136|"
+    "9630=1.083800|9631=1.085034|9752=7|10=000|"
+)
+
+# ExecutionReport (35=8) — filled NDS (ProductType FX-NDS): swap-shaped with a
+# fixing reference (7075) and near/far fixing dates (7543/7545). USD/KRW quotes
+# to two decimals, so -150 swap pips is -1.50 in rate terms.
+SUN_NDS_EXECUTION_FILL = (
+    "8=FIXT.1.1|9=0|35=8|34=6|49=360T_SUN|56=ACME_SUN|"
+    "52=20260604-08:10:00.000|1128=9|"
+    "1=ACME|6=0|11=CL-SUN-NDS-1|14=5000000|15=USD|17=EX-SUN-3|31=-150.00|"
+    "32=5000000|37=EMSO-6565201|38=5000000|39=2|40=2|44=-150.00|54=2|"
+    "55=USD/KRW|59=0|1057=N|60=20260604-08:09:59.900|64=20260606|150=F|151=0|"
+    "192=5000000|193=20260806|194=1320.50|527=EMSO-6565222|"
+    "453=1|448=CONTRA_BANK|447=D|452=17|"
+    "6164=0|6165=5000000|9617=5000000|9630=1320.500000|9631=1319.000000|"
+    "7071=FX-NDS|7075=KFTC-USDKRW|7543=20260604|7545=20260804|10=000|"
+)
+
+# 'Trade Export' ExecutionReport (35=8) — the regulatory-complete form of a
+# fill. Near all-in in LastPx(31) and far all-in in LastPx2(6160) (not 9630/9631),
+# per-leg ISINs in NoSecurityAltID(454), UPIs in 2891/7891, TVTICs in the
+# NoRegulatoryTradeIDs(1907) group, MiFID waiver/deferral in 2668, and the
+# clearing outcome in 7626-7630.
+SUN_TRADE_EXPORT_EXECUTION = (
+    "8=FIXT.1.1|9=0|35=8|34=7|49=360T_SUN|56=ACME_SUN|"
+    "52=20260604-08:03:12.900|1128=9|"
+    "37=EMSO-6565101|527=EMSO-6565116|11=CL-SUN-1|"
+    "453=5|"
+    "448=ACMECO|447=D|452=1|"
+    "448=5493001KJTIIGC8Y1R12|447=N|452=1|"
+    "448=ACMEUSER1|447=D|452=11|"
+    "448=CONTRA_BANK|447=D|452=17|"
+    "448=T3TM|447=G|452=64|"
+    "17=EX-SUN-EXPORT-1|150=F|39=2|1=ACME|64=20260608|55=EUR/USD|"
+    "454=2|455=EZ0000000001|456=4|455=EZ0000000002|456=4|"
+    "54=1|38=4000000|15=EUR|1057=Y|32=0|31=1.083800|194=1.08380|151=0|14=0|6=0|"
+    "60=20260604-08:03:11.380|193=20260708|192=4000000|828=65|"
+    "2891=QZ0000000001|6160=1.085034|7891=QZ0000000002|"
+    "1907=3|"
+    "1903=T3TM20260604000000001|1906=5|"
+    "1903=T3TM20260604000000002|1906=5|"
+    "1903=T3TM20260604000000003|1906=5|"
+    "2668=2|2669=0|2670=4|2669=1|2670=7|"
+    "7626=1|7629=CLR-0000001|7630=20260604-08:04:00|10=000|"
+)
+
+# NewOrderList (35=E) — a "Strip": linked one-cancels-other limit orders in two
+# tenors of the same pair. Each NoOrders(73) entry is a complete order.
+SUN_NEW_ORDER_LIST = (
+    "8=FIXT.1.1|9=0|35=E|34=8|49=ACME_SUN|56=360T_SUN|"
+    "52=20260604-08:20:00.000|1128=9|"
+    "66=STRIP-1|394=3|68=2|73=2|"
+    "11=CL-SUN-S1|67=1|453=1|448=ACMEUSER1|447=P|452=12|2376=24|"
+    "1=ACME|64=20260608|110=250000|1822=2|55=EUR/USD|54=1|38=10000000|40=2|"
+    "44=12.34|15=EUR|59=0|193=20260708|2593=1|2594=2|2595=Y|9821=N|9822=N|"
+    "11=CL-SUN-S2|67=2|453=1|448=ACMEUSER1|447=P|452=12|2376=24|"
+    "1=ACME|64=20260608|110=250000|1822=2|55=EUR/USD|54=1|38=10000000|40=2|"
+    "44=24.10|15=EUR|59=0|193=20260908|2593=1|2594=2|2595=Y|9821=N|9822=N|"
+    "10=000|"
+)
+
+# PartyRiskLimitCheckRequest (35=DF) — 360T asks the participant to credit-check
+# the matched counterparty. Carries the matched notional per leg in the
+# NoLegs(555) group (685 amount, 9622 opposite amount, 588 value date, 566
+# all-in rate) and links to the fill via RefOrderID(1080).
+SUN_PARTY_RISK_LIMIT_CHECK_REQUEST = (
+    "8=FIXT.1.1|9=0|35=DF|34=9|49=360T_SUN|56=ACME_SUN|"
+    "52=20260604-08:03:11.200|1128=9|"
+    "2318=RLC-0000001|2320=0|2321=0|1080=EMSO-6565116|2323=0|2324=4000000|"
+    "15=EUR|"
+    "453=2|448=ACMEUSER1|447=D|452=11|448=CONTRA_BANK|447=D|452=17|"
+    "55=EUR/USD|194=1.08380|555=2|"
+    "685=4000000|9622=4335200|588=20260608|566=1.083800|"
+    "685=4000000|9622=4340136|588=20260708|566=1.085034|"
+    "54=1|10=000|"
+)
+
+# PartyRiskLimitCheckRequestAck (35=DG) — the participant approves the check.
+# No instrument, so this one carries no trade summary.
+SUN_PARTY_RISK_LIMIT_CHECK_ACK = (
+    "8=FIXT.1.1|9=0|35=DG|34=10|49=ACME_SUN|56=360T_SUN|"
+    "52=20260604-08:03:11.260|1128=9|"
+    "2318=RLC-0000001|2325=0|2326=0|2320=0|2321=0|1080=EMSO-6565116|"
+    "2324=4000000|15=EUR|10=000|"
+)
+
+# MarketDataSnapshotFullRefresh (35=W) — the full swap-points book for one
+# instrument: bid, offer and the indicative SDF mid (MDEntryType H, no size).
+SUN_MARKET_DATA_SNAPSHOT = (
+    "8=FIXT.1.1|9=0|35=W|34=11|49=360T_SUN|56=ACME_SUN|"
+    "52=20260604-08:30:00.000|1128=9|"
+    "262=MDR-1|55=EUR/USD|268=3|"
+    "269=0|270=12.20|15=EUR|271=10000000|1070=1|"
+    "269=1|270=12.50|15=EUR|271=15000000|1070=1|"
+    "269=H|270=12.35|15=EUR|1070=0|10=000|"
+)
+
+# ExecutionReport (35=8) — accepted EFP order (ProductType EFP). The far leg is
+# a futures contract: code in SecurityID(48)/SecurityIDSource(22), contract
+# count in OrderQty2(192) and last trading date in 5241.
+SUN_EFP_ORDER_ACK = (
+    "8=FIXT.1.1|9=0|35=8|34=12|49=360T_SUN|56=ACME_SUN|"
+    "52=20260604-08:40:00.000|1128=9|"
+    "1=ACME|6=0|11=CL-SUN-EFP-1|14=0|15=EUR|17=EX-SUN-4|22=8|37=EMSO-6565301|"
+    "38=5000000|39=0|40=2|44=-1.25|48=ECM6|54=1|55=EUR/USD|59=0|"
+    "60=20260604-08:39:59.800|64=20260608|150=0|151=5000000|192=40|"
+    "193=20260615|527=0|5241=20260613|7071=EFP|9752=3|10=000|"
+)
+
+SUN_ALL_SAMPLES = (
+    SUN_SECURITY_DEFINITION,
+    SUN_SWAP_NEW_ORDER_SINGLE,
+    SUN_SWAP_ORDER_ACK,
+    SUN_SWAP_EXECUTION_FILL,
+    SUN_NDS_EXECUTION_FILL,
+    SUN_TRADE_EXPORT_EXECUTION,
+    SUN_NEW_ORDER_LIST,
+    SUN_PARTY_RISK_LIMIT_CHECK_REQUEST,
+    SUN_PARTY_RISK_LIMIT_CHECK_ACK,
+    SUN_MARKET_DATA_SNAPSHOT,
+    SUN_EFP_ORDER_ACK,
 )
 
 THREE_SIXTY_T_TI_ALL_SAMPLES = (

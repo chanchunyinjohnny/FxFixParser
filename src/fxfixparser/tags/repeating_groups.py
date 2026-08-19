@@ -58,6 +58,8 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             # Forward market data components
             1026,  # MDEntrySpotRate
             1027,  # MDEntryForwardPoints
+            # Quote type of the entry (360T SUN mid / limit book entries)
+            1070,  # MDQuoteType
             # Venue-specific custom tags commonly used in market data
             9122,  # VenueEntryTime
             9123,  # VenueEntryDate
@@ -233,6 +235,7 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             654,  # LegRefID
             682,  # LegIOIQty
             683,  # NoLegStipulations
+            681,  # LegBidPx
             684,  # LegOfferPx
             685,  # LegOrderQty (FIX 5.0+, added via fx_tags)
             686,  # LegPriceType
@@ -261,6 +264,10 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             671,  # LegAllocAccount
             673,  # LegAllocQty
             7652,  # LegMidPx (360T)
+            # 360T SUN credit-check legs (PartyRiskLimitCheckRequest/Ack):
+            # per-leg opposite amount and NDS fixing date.
+            9622,  # LegOppositeOrderQty (360T SUN)
+            7543,  # FixingDate (360T SUN, per credit-check leg)
         },
     ),
     # Allocations
@@ -280,7 +287,11 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             161,  # AllocText
         },
     ),
-    # Orders in a list
+    # Orders in a list. 360T SUN's NewOrderList (a "Strip" of linked FX Swap /
+    # NDS limit orders) puts a complete order in each entry, so the members
+    # cover the order economics plus the nested NoPartyIDs(453) and
+    # NoOrderAttributes(2593) subgroups flattened into it. ClOrdID(11) opens
+    # each entry.
     RepeatingGroupDefinition(
         count_tag=73,  # NoOrders
         name="Orders",
@@ -290,7 +301,41 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             67,  # ListSeqNo
             583,  # ClOrdLinkID
             160,  # SettlInstMode
+            1,  # Account
+            15,  # Currency
+            38,  # OrderQty
+            40,  # OrdType
+            44,  # Price
+            54,  # Side
+            55,  # Symbol
+            59,  # TimeInForce
+            64,  # SettlDate (near leg)
+            110,  # MinQty
+            126,  # ExpireTime
+            192,  # OrderQty2 (far leg)
+            193,  # SettlDate2 (far leg)
+            1822,  # MinQtyMethod
+            # Nested NoPartyIDs(453) and NoOrderAttributes(2593), flattened.
+            453,  # NoPartyIDs
+            447,  # PartyIDSource
+            448,  # PartyID
+            452,  # PartyRole
+            2376,  # PartyRoleQualifier
+            2593,  # NoOrderAttributes
+            2594,  # OrderAttributeType
+            2595,  # OrderAttributeValue
+            # 360T SUN order tags (defined in the SUN venue overlay).
+            7071,  # ProductType
+            7075,  # FixingReference (NDS)
+            7543,  # FixingDate (NDS near leg)
+            7545,  # FixingDate2 (NDS far leg)
+            9821,  # OppositeMatchingAllowed
+            9822,  # UnevenSwapAllowed
         },
+        # A single order carries several party entries and may carry several
+        # order attributes, so those tags repeat inside one entry — only a
+        # repeated parent tag (ClOrdID first among them) opens a new order.
+        nested_member_tags={447, 448, 452, 2376, 2594, 2595},
     ),
     # Fills/Executions
     RepeatingGroupDefinition(
@@ -433,6 +478,15 @@ REPEATING_GROUPS: list[RepeatingGroupDefinition] = [
             312,  # UnderlyingSymbolSfx
             307,  # UnderlyingSecurityDesc (tenor long name)
             542,  # UnderlyingMaturityDate (value date)
+            # 360T SUN calendar entries: the far-leg value date, the NDS fixing
+            # dates/reference and the EFP futures contract details.
+            9612,  # UnderlyingMaturityDate2 (far-leg value date)
+            9823,  # UnderlyingFixingDate (near leg)
+            9824,  # UnderlyingFixingDate2 (far leg)
+            9825,  # UnderlyingFixingReference
+            2620,  # UnderlyingFutureID (EFP)
+            2621,  # UnderlyingFutureIDSource (EFP)
+            5242,  # UnderlyingLastTradingDate (EFP)
         },
     ),
     # Regulatory trade IDs (FIX 5.0 SP2; 360T / Bloomberg DOR ExecutionReport)

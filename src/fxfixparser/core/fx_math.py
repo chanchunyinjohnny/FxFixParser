@@ -72,3 +72,35 @@ def swap_side_actions(
     near_action = _format(near_verb, far_verb)
     far_action = _format(far_verb, near_verb)
     return (near_action, far_action)
+
+
+def classify_forward_points(
+    declared: float | None,
+    all_in: float | None,
+    spot: float | None,
+    pip: float | None,
+    tol_pips: float = 0.03,
+) -> tuple[str, float] | None:
+    """Classify a declared forward-points value against its own quote.
+
+    Venue specs (e.g. Bloomberg ORP/DOR) define forward-point tags as an
+    unscaled decimal rate offset (8 pips on EUR/USD = 0.0008), but feeds
+    are routinely observed sending market-convention pips (8) instead.
+    This compares ``declared`` with the offset implied by the quote's own
+    all-in rate and spot rate (``all_in - spot``) under both readings.
+
+    Returns ``(convention, declared_in_pips)`` where ``convention`` is
+    ``"decimal"`` or ``"pips"`` — the spec-compliant decimal reading wins
+    when both fit (only possible near zero). Returns ``None`` when any
+    input is missing, or when the declared value matches neither reading
+    within ``tol_pips`` — i.e. the vendor's forward points disagree with
+    the vendor's own all-in and spot rates.
+    """
+    if declared is None or all_in is None or spot is None or not pip:
+        return None
+    implied_pips = (all_in - spot) / pip
+    if abs(declared / pip - implied_pips) <= tol_pips:
+        return ("decimal", declared / pip)
+    if abs(declared - implied_pips) <= tol_pips:
+        return ("pips", declared)
+    return None

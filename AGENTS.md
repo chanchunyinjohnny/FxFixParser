@@ -7,7 +7,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 FxFixParser is a Python project for parsing FIX (Financial Information eXchange) protocol messages.
 This project focus on building a robust parser for FIX messages used for FX trading, e.g. Spot, Forwards, Swaps, NDF, Futures, Options.
 The program is able to parse venue specific FIX messages and extract relevant trade information.
-It currently supports parsing FX messages from Smart Trade, FXGO, and 360T, it is able to translate all the tag message into human readable format, telling users what tag means what.
+It currently supports parsing FX messages from Smart Trade, Bloomberg FXGO, Bloomberg DOR (including the MAP gateway flavor), 360T (RFS Market Taker + SUN swaps order book + TradeImporter), SGX Titan OTC, and LSEG / Refinitiv FX Matching (MAPI); it is able to translate all the tag message into human readable format, telling users what tag means what.
 
 All features are supported by comprehensive unit tests to ensure reliability and correctness.
 

@@ -8,6 +8,7 @@ from fxfixparser.venues.lseg_fx_matching import LSEGFXMatchingHandler
 from fxfixparser.venues.sgx_titan_otc import SGXTitanOTCHandler
 from fxfixparser.venues.smart_trade import SmartTradeHandler
 from fxfixparser.venues.three_sixty_t import ThreeSixtyTHandler
+from fxfixparser.venues.three_sixty_t_sun import ThreeSixtyTSUNHandler
 from fxfixparser.venues.three_sixty_t_ti import ThreeSixtyTTIHandler
 
 # FIX tags inspected, in priority order, when auto-detecting a venue from a
@@ -71,7 +72,13 @@ class VenueRegistry:
         registry.register(SmartTradeHandler())
         registry.register(FXGOHandler())
         registry.register(BloombergDORHandler())
+        # The three 360T interfaces stay adjacent so the UI dropdown groups
+        # them. SUN is registered before TI on purpose: both dialects use
+        # ProductType(7071)=FX-SWAP, and claims_message is consulted in
+        # registration order, so SUN — whose claim requires a SUN-only marker —
+        # gets first refusal on its own traffic.
         registry.register(ThreeSixtyTHandler())
+        registry.register(ThreeSixtyTSUNHandler())
         registry.register(ThreeSixtyTTIHandler())
         registry.register(SGXTitanOTCHandler())
         registry.register(LSEGFXMatchingHandler())

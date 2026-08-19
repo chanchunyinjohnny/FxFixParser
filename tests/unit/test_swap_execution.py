@@ -10,7 +10,12 @@ from __future__ import annotations
 
 import pytest
 
-from fxfixparser.core.fx_math import parse_symbol, pip_size, swap_side_actions
+from fxfixparser.core.fx_math import (
+    classify_forward_points,
+    parse_symbol,
+    pip_size,
+    swap_side_actions,
+)
 from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.venues.bloomberg_dor import BloombergDORHandler
 from fxfixparser.venues.smart_trade import SmartTradeHandler
@@ -113,6 +118,30 @@ class TestFxMath:
         assert swap_side_actions("1", None, "USD", "CNH") == (None, None)
         # Unsupported side code
         assert swap_side_actions("9", "USD", "USD", "CNH") == (None, None)
+
+    def test_classify_forward_points_pips_convention(self):
+        # USD/JPY: all-in 159.0938 vs spot 159.18 → -8.62 pips implied;
+        # declared -8.62 is market-convention pips, not the spec decimal.
+        assert classify_forward_points(-8.62, 159.0938, 159.18, 0.01) == ("pips", -8.62)
+
+    def test_classify_forward_points_decimal_convention(self):
+        # EUR/USD: declared 0.000161 is the spec's unscaled decimal for
+        # 1.61 pips (all-in 1.164551 vs spot 1.16439).
+        verdict = classify_forward_points(0.000161, 1.164551, 1.16439, 0.0001)
+        assert verdict is not None
+        assert verdict[0] == "decimal"
+        assert verdict[1] == pytest.approx(1.61)
+
+    def test_classify_forward_points_mismatch(self):
+        # Declared points fit neither convention → vendor math is wrong.
+        assert classify_forward_points(-5.00, 159.0938, 159.18, 0.01) is None
+
+    def test_classify_forward_points_missing_inputs(self):
+        assert classify_forward_points(None, 1.1, 1.1, 0.0001) is None
+        assert classify_forward_points(0.0008, None, 1.1, 0.0001) is None
+        assert classify_forward_points(0.0008, 1.1, None, 0.0001) is None
+        assert classify_forward_points(0.0008, 1.1, 1.1, None) is None
+        assert classify_forward_points(0.0008, 1.1, 1.1, 0) is None
 
 
 class TestSwapExecutionExtraction:

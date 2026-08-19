@@ -260,10 +260,16 @@ class TestVenueRegistry:
         assert names.index("Bloomberg DOR") == names.index("Bloomberg FXGO") + 1
 
     def test_360t_venues_are_adjacent(self, venue_registry: VenueRegistry) -> None:
-        """360T RFS and 360T TI sit next to each other so the UI dropdown groups
-        the two 360T interfaces together."""
+        """The three 360T interfaces sit next to each other so the UI dropdown
+        groups them together.
+
+        The order matters as well as the adjacency: SUN is consulted before TI
+        because both dialects use ProductType(7071)=FX-SWAP and claims_message
+        runs in registration order.
+        """
         names = [v.name for v in venue_registry.all_venues()]
-        assert names.index("360T TI") == names.index("360T RFS") + 1
+        assert names.index("360T SUN") == names.index("360T RFS") + 1
+        assert names.index("360T TI") == names.index("360T SUN") + 1
 
     def test_venue_detection_bloomberg_dor(self, venue_registry: VenueRegistry) -> None:
         parser = FixParser(config=ParserConfig(strict_checksum=False))
@@ -388,6 +394,9 @@ class TestTradeSummaryGate:
             "BLOOMBERG_DOR_SPOT_RFQ_REJECT",  # 35=AG QuoteRequestReject
             "THREE_SIXTY_T_QUOTE_CANCEL",  # 35=Z QuoteCancel
             "THREE_SIXTY_T_SECURITY_DEFINITION",  # 35=d SecurityDefinition
+            "SUN_SECURITY_DEFINITION",  # 35=d tenor / value-date calendar
+            # 35=DG customer -> 360T credit-check Ack: an approval, no instrument
+            "SUN_PARTY_RISK_LIMIT_CHECK_ACK",
         }
     )
 

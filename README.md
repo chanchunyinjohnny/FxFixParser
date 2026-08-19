@@ -28,7 +28,7 @@ These cryptic tag-number pairs are hard to read without constantly referencing t
 
 - **Instant tag translation** — every FIX tag is mapped to its field name and human-readable description
 - **Enumerated value decoding** — coded values like `54=1` are decoded to "Buy", `39=2` to "Filled", etc.
-- **Venue-aware parsing** — recognises messages from Smart Trade, Bloomberg FXGO, Bloomberg DOR, 360T (RFS Market Taker + TradeImporter), SGX Titan OTC, and LSEG / Refinitiv FX Matching (MAPI), including their proprietary custom tags
+- **Venue-aware parsing** — recognises messages from Smart Trade, Bloomberg FXGO, Bloomberg DOR, 360T (RFS Market Taker + SUN swaps order book + TradeImporter), SGX Titan OTC, and LSEG / Refinitiv FX Matching (MAPI), including their proprietary custom tags
 - **FX product detection** — automatically identifies whether a message is a Spot, Forward, Swap, NDF, Futures, or Options trade
 - **Trade summary** — extracts key trade details (symbol, side, quantity, price, settlement date) at a glance
 - **Repeating group support** — correctly parses and displays nested groups like market data entries, legs, and party IDs
@@ -117,7 +117,7 @@ Results are shown in three tabs:
 - **Human Readable** — a clean text format, useful for copying into emails or documents.
 - **JSON** — structured output for programmatic use or further processing.
 
-If the venue is recognised, a **Trade Summary** appears showing the key details at a glance — symbol, side, quantity, price, product type, and settlement information. For quotes, bid/offer prices are shown. For swaps, near and far leg details are broken out separately.
+If the venue is recognised, a **Trade Summary** appears showing the key details at a glance — symbol, side, quantity, price, product type, and settlement information. For quotes, bid/offer prices are shown. For swaps, near and far leg details are broken out separately. For two-sided swap quotes with per-leg all-in rates (e.g. Bloomberg DOR), the swap points are **computed from the all-in leg rates** (far leg − near leg, per side — the spec definition of swap points) and shown in both pips and rate terms, and a **Forward Point Check** table verifies the venue's declared forward-point fields against the points implied by its own all-in and spot rates — flagging whether the venue sent spec-compliant unscaled decimals, market-convention pips, or numbers that simply don't agree with its own rates.
 
 ### Sidebar Options
 
@@ -140,21 +140,20 @@ Example: `523=54930035WQZLGC45RZ35` displays as raw value `54930035WQZLGC45RZ35`
 
 ### Sample Messages
 
-The sidebar includes built-in sample messages you can load with one click:
+The sidebar includes built-in sample messages you can load with one click. They
+are **grouped by venue** — one expander per venue, in the same order as the venue
+selector — so you can see how the same product looks on different interfaces:
 
-| Sample | What It Shows |
-|--------|--------------|
-| FX Spot | A basic spot execution report |
-| FX Forward | Forward trade with settlement date and forward points |
-| FX Swap | Swap with near and far leg details |
-| FX NDF | Non-deliverable forward with fixing information |
-| Market Data Snapshot | Message with repeating group of price entries |
-| Market Data Incremental | Incremental market data update |
-| Quote Request | Multi-symbol quote request with repeating group |
-| FX Swap Quote | TOD/TOM swap quote with all-in rates and swap points |
-| Bloomberg DOR Spot | Spot trade via Bloomberg Derivatives Order Routing |
-| Bloomberg DOR Forward | Forward trade via Bloomberg DOR |
-| Bloomberg DOR Swap | Swap trade via Bloomberg DOR with legs group |
+| Venue group | What It Shows |
+|-------------|--------------|
+| Smart Trade (LiquidityFX) | Swap execution, TOD/TOM swap quote with all-in rates and swap points, market data snapshot and incremental update (repeating groups of price entries) |
+| Bloomberg FXGO | Spot execution, NDF with fixing information, multi-symbol quote request |
+| Bloomberg DOR | Spot, forward and swap executions (legs group), a two-sided swap quote with per-leg all-in rates and forward points, plus a MAP gateway swap with competing dealer quotes and LEIs |
+| 360T RFS | Spot quote request, two-way swap quote, forward / swap / NDF executions |
+| 360T SUN | Swap limit order, partial fill, NDS, the regulatory 'Trade Export' report, a strip (NewOrderList), a credit-check request, the financial calendar and the swap-points book |
+| 360T TI | Post-trade spot / forward / swap executions with competing dealer quotes, money market and option |
+| SGX Titan OTC | FX futures trade capture and execution report |
+| LSEG FX Matching | Spot execution, forward-swap execution with legs, forward-swap quote negotiation |
 
 ## Supported Venues
 
@@ -164,11 +163,12 @@ The sidebar includes built-in sample messages you can load with one click:
 | **Bloomberg FXGO** | Bloomberg's FX trading *platform* — the front-end where FX price discovery and execution happen |
 | **Bloomberg DOR** | Bloomberg Derivatives Order Routing — the ORP/DOR FIX *connectivity protocol* (FIXT 1.1 / FIX 5.0 SP2) that carries Bloomberg execution-facility flow; custom tags for algo execution, tenor support, multi-leg instruments, competing dealer quotes, and regulatory trade IDs. Also covers the Bloomberg **MAP gateway** — the same ORP/DOR dialect carried over plain FIX 4.4 with `MAP_<party>` CompIDs |
 | **360T RFS (Market Taker)** | Deutsche Börse multi-bank FX RFS platform (FIX 4.4). Spot, Forward, Swap, NDF, NDS, FX Time Option and Block trades across QuoteRequest/Quote/QuoteCancel/NewOrderSingle/NewOrderMultileg/ExecutionReport/SecurityDefinition. Derives product type (no SecurityType is sent) and extracts 360T swap economics — Side relative to the base currency on the far leg, far-leg rates from 6050/6051 quotes and 6160 fills |
+| **360T SUN (Swap User Network)** | 360T's anonymous FX Swap limit order book, run as a 360T MTF (FIX 5.0 SP2 over FIXT 1.1). Every instrument is two-legged — FX Swap, NDS and EFP — across NewOrderSingle/NewOrderList (strips)/OrderCancelReplace/ExecutionReport, the regulatory 'Trade Export' ExecutionReport, the PartyRiskLimitCheck credit-check pair, SecurityDefinition (tenor calendar) and the swap-points market data book. Orders are priced in swap points, so the Trade Summary reads the all-in leg rates from 9630/9631 (or 31/6160 on the trade export) and never shows the points as a rate |
 | **360T TI (TradeImporter)** | 360T's post-trade STP feed (FIX 4.4). A single ExecutionReport message per filled trade; ProductType (7071) carries the product directly (FX-SPOT/FX-FWD/FX-SWAP/FX-OPTION/MM/…); competing-dealer quotes in NoCompetingQuotes (9516); swap far-leg rate in 6160. Full Trade Summary for the core FX set; all products fully tag-decoded |
 | **SGX Titan OTC** | SGX Titan OTC FIX 5.0 SP2 gateway for SGX listed FX futures (KRW/USD, USD/CNH, FlexC variants, etc.) |
 | **LSEG / Refinitiv FX Matching (MAPI)** | Anonymous interbank FX Matching central-limit-order-book; FX Spot and FX Forward Swap over FIX 5.0 SP2 / FIXT 1.1, including the forward-swap quote-negotiation messages |
 
-Venue is auto-detected from the message's component IDs — SenderCompID (tag 49), TargetCompID (tag 56), or OnBehalfOfCompID (tag 115) — so client-to-venue messages resolve too (e.g. LSEG FX Matching is recognised by the constant gateway CompID `TR MATCHING`). Bloomberg FXGO and Bloomberg DOR share the Bloomberg umbrella: a DOR/ORP message is recognised by its FIXT 1.1 / FIX 5.0 protocol markers even when it carries a generic Bloomberg CompID, so it is never mistaken for FXGO; MAP gateway sessions are recognised by their `MAP_BLP*` CompID (the Bloomberg side of a MAP session) even though they run plain FIX 4.4 without routing markers. The two 360T interfaces are handled the same way: a TradeImporter message is recognised by its `_TI` CompID, its TI ProductType values, or its NoCompetingQuotes group, so it is never mistaken for the RFS Market Taker. You can also select a venue manually from the sidebar.
+Venue is auto-detected from the message's component IDs — SenderCompID (tag 49), TargetCompID (tag 56), or OnBehalfOfCompID (tag 115) — so client-to-venue messages resolve too (e.g. LSEG FX Matching is recognised by the constant gateway CompID `TR MATCHING`). Bloomberg FXGO and Bloomberg DOR share the Bloomberg umbrella: a DOR/ORP message is recognised by its FIXT 1.1 / FIX 5.0 protocol markers even when it carries a generic Bloomberg CompID, so it is never mistaken for FXGO; MAP gateway sessions are recognised by their `MAP_BLP*` CompID (the Bloomberg side of a MAP session) even though they run plain FIX 4.4 without routing markers. The three 360T interfaces are handled the same way: a TradeImporter message is recognised by its `_TI` CompID, its TI ProductType values, or its NoCompetingQuotes group, and a SUN message by its own dialect markers — a `_SUN` CompID, a SUN-only tag (e.g. LastNearLegPx 9630, UnevenSwapAllowed 9822), the `EMSO-` fill-id prefix, the FX-NDS product code, or a PartyRiskLimitCheck message — so none of them is ever mistaken for another. You can also select a venue manually from the sidebar.
 
 ## Supported FIX Versions
 
@@ -179,7 +179,7 @@ The parser is version-agnostic at the byte level — it parses any FIX `tag=valu
 | **FIX 4.4** | Standard FIX 4.4 fields (loaded from bundled `spec/FIX44.xml`) | Yes |
 | **FIXT 1.1 session tags** | 1128 ApplVerID, 1129 CstmApplVerID, 1156 ApplExtID | Yes (merged into default) |
 | **FX extensions** | Curated FX-specific tags and enum descriptions | Yes (merged into default) |
-| **Venue custom tags** | Smart Trade, Bloomberg FXGO, Bloomberg DOR, 360T RFS, 360T TI, SGX Titan OTC, LSEG FX Matching | Merged when venue is detected/selected |
+| **Venue custom tags** | Smart Trade, Bloomberg FXGO, Bloomberg DOR, 360T RFS, 360T SUN, 360T TI, SGX Titan OTC, LSEG FX Matching | Merged when venue is detected/selected |
 | **FIX 5.0 SP2** | Standard FIX 5.0 SP2 fields (bundled `spec/FIX50SP2.xml`) | Auto-loaded when a message carries `1128=9` (ApplVerID); also available via `load_fix_spec_fields()` |
 
 ## Supported FX Products

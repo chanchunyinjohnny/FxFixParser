@@ -17,6 +17,7 @@ from tests.fixtures.sample_messages import (
     BLOOMBERG_DOR_SWAP_QUOTE_RESPONSE,
     BLOOMBERG_DOR_SWAP_QUOTE_STATUS,
     BLOOMBERG_DOR_SWAP_QUOTE_STATUS_PASS,
+    BLOOMBERG_DOR_SWAP_QUOTE_TWO_SIDED,
     BLOOMBERG_MAP_SWAP_EXEC,
 )
 
@@ -416,6 +417,114 @@ class TestBloombergDORRepeatingGroupCounts:
         sub_type = next((f for f in message.fields if f.tag == 803), None)
         assert sub_type is not None
         assert sub_type.value_description == "Legal Entity Identifier"
+
+
+class TestBloombergDORTwoSidedSwapQuote:
+    """Two-sided FX swap Quote (35=S): per-leg all-in bid/offer rates
+    (681/684) plus declared forward points (1067/1068) and flat spot rates
+    (188/190). Swap points must be computed from the all-in leg rates per
+    the ORP spec definition (far-minus-near differential per side) — the
+    declared 1067/1068 values are pips on the wire despite the spec asking
+    for unscaled decimals, so they must never feed the swap-point figure."""
+
+    @pytest.fixture
+    def parser(self):
+        return FixParser(config=ParserConfig(strict_checksum=False))
+
+    @pytest.fixture
+    def trade(self, parser):
+        handler = BloombergDORHandler()
+        message = parser.parse(BLOOMBERG_DOR_SWAP_QUOTE_TWO_SIDED, venue="Bloomberg DOR")
+        return handler.extract_trade(message)
+
+    def test_legs_carry_bid_side_tags(self, parser):
+        """681 LegBidPx / 1067 LegBidForwardPoints must be group members so
+        the walker keeps both legs intact (regression: 681 was missing and
+        terminated the first leg entry)."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_QUOTE_TWO_SIDED, venue="Bloomberg DOR")
+        legs = None
+        for sf in message.get_structured_fields():
+            if sf.is_group and sf.group is not None and sf.group.count_field.tag == 555:
+                legs = sf.group
+        assert legs is not None
+        assert legs.count == 2
+        assert len(legs.entries) == 2
+        for entry in legs.entries:
+            tags = {f.tag for f in entry.fields}
+            assert {681, 684, 1067, 1068}.issubset(tags)
+
+    def test_quote_swap_basics(self, trade):
+        assert trade.is_quote is True
+        assert trade.is_swap is True
+        assert trade.symbol == "USD/JPY"
+        assert trade.side == "Two-Way"
+        assert trade.quantity == pytest.approx(1000000)
+        assert trade.near_quantity == pytest.approx(1000000)
+        assert trade.far_quantity == pytest.approx(1000000)
+        assert trade.base_currency == "USD"
+        assert trade.term_currency == "JPY"
+        assert trade.pip_size == pytest.approx(0.01)
+
+    def test_leg_all_in_rates_extracted(self, trade):
+        assert trade.near_leg_bid_rate == pytest.approx(159.0938)
+        assert trade.near_leg_offer_rate == pytest.approx(159.0945)
+        assert trade.far_leg_bid_rate == pytest.approx(158.9688)
+        assert trade.far_leg_offer_rate == pytest.approx(158.9680)
+        assert trade.bid_spot_rate == pytest.approx(159.18)
+        assert trade.offer_spot_rate == pytest.approx(159.18)
+
+    def test_declared_leg_points_extracted_verbatim(self, trade):
+        """1067/1068 are carried through untouched (units unverified)."""
+        assert trade.bid_fwd_points == pytest.approx(-8.62)
+        assert trade.offer_fwd_points == pytest.approx(-8.55)
+        assert trade.far_bid_fwd_points == pytest.approx(-21.12)
+        assert trade.far_offer_fwd_points == pytest.approx(-21.20)
+
+    def test_swap_points_computed_from_all_in_legs(self, trade):
+        """Spec definition: differential between the far leg's bid/offer and
+        the near leg's bid/offer, from the all-in rates.
+
+        bid  = 158.9688 - 159.0938 = -0.1250 (-12.50 pips)
+        offer = 158.9680 - 159.0945 = -0.1265 (-12.65 pips)
+        """
+        assert trade.swap_points_source == "computed"
+        assert trade.bid_swap_points == pytest.approx(-0.1250, abs=1e-9)
+        assert trade.offer_swap_points == pytest.approx(-0.1265, abs=1e-9)
+        assert trade.bid_swap_points / trade.pip_size == pytest.approx(-12.50, abs=1e-6)
+        assert trade.offer_swap_points / trade.pip_size == pytest.approx(-12.65, abs=1e-6)
+
+    def test_declared_points_classified_as_pips_convention(self, trade):
+        """The wire values (-8.62 etc.) are pips, not the spec's decimals —
+        classify_forward_points must detect that against the all-in/spot."""
+        from fxfixparser.core.fx_math import classify_forward_points
+
+        for declared, all_in, spot in (
+            (trade.bid_fwd_points, trade.near_leg_bid_rate, trade.bid_spot_rate),
+            (trade.offer_fwd_points, trade.near_leg_offer_rate, trade.offer_spot_rate),
+            (trade.far_bid_fwd_points, trade.far_leg_bid_rate, trade.bid_spot_rate),
+            (trade.far_offer_fwd_points, trade.far_leg_offer_rate, trade.offer_spot_rate),
+        ):
+            verdict = classify_forward_points(declared, all_in, spot, trade.pip_size)
+            assert verdict is not None
+            assert verdict[0] == "pips"
+            assert verdict[1] == pytest.approx(declared)
+
+    def test_one_sided_quote_still_extracts(self, parser):
+        """The offer-only quote fixture (684/1068 only, no bid side) yields
+        offer-side data and an offer-only swap-point figure."""
+        handler = BloombergDORHandler()
+        message = parser.parse(BLOOMBERG_DOR_SWAP_QUOTE_RESPONSE, venue="Bloomberg DOR")
+        trade = handler.extract_trade(message)
+        assert trade.is_quote is True
+        assert trade.is_swap is True
+        assert trade.side == "Offer Only"
+        assert trade.near_leg_bid_rate is None
+        assert trade.bid_swap_points is None
+        assert trade.near_leg_offer_rate == pytest.approx(1.164551)
+        assert trade.far_leg_offer_rate == pytest.approx(1.165588)
+        assert trade.swap_points_source == "computed"
+        # 1.165588 - 1.164551 = 0.001037 -> 10.37 pips
+        assert trade.offer_swap_points == pytest.approx(0.001037, abs=1e-9)
 
 
 class TestBloombergDORQuoteStatusPass:
