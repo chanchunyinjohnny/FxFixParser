@@ -5,7 +5,7 @@ from typing import Any
 import streamlit as st
 
 from fxfixparser.core.exceptions import ChecksumError, ParseError, ValidationError
-from fxfixparser.core.fx_math import classify_forward_points, pip_size
+from fxfixparser.core.fx_math import classify_forward_points, pip_size, swap_quote_directions
 from fxfixparser.core.lei import LEI_BEARING_TAGS, LeiLookupError, find_leis, lookup_lei
 from fxfixparser.core.parser import FixParser, ParserConfig
 from fxfixparser.products.base import ProductRegistry
@@ -538,6 +538,10 @@ def _render_swap_trade_summary(trade: Any, message: Any) -> None:
             st.caption(
                 "Convention: order Side (54) describes the action on the far leg"
                 " in the trade currency; the near leg is the opposite."
+                " Venue specs express swap direction per leg (e.g. Bloomberg"
+                " ORP: Side(54)=B with LegSide 624 per leg); wires that"
+                " populate a single parent Side on a swap are observed to"
+                " match the far leg's LegSide (Bloomberg DOR swap ERs)."
             )
         elif trade.swap_side_source == "360t":
             st.caption(
@@ -943,19 +947,58 @@ def main() -> None:
                                     f"{offer_pts:+.6f}" if offer_pts is not None else "N/A",
                                 ],
                             }
+                        bid_dir, offer_dir = swap_quote_directions(
+                            bid_pts, offer_pts, trade.base_currency
+                        )
+                        if bid_dir and offer_dir:
+                            swap_data["Taker Direction"] = [bid_dir, offer_dir]
                         st.dataframe(swap_data, use_container_width=True, hide_index=True)
-                        if bid_pts is not None and offer_pts is not None:
+                        if bid_dir and offer_dir:
                             st.caption(
-                                "Bid/Offer here follow the per-leg all-in"
-                                " columns, which are labelled from the NEAR"
-                                " leg: the Bid package is the direction where"
-                                " the dealer buys the base currency on the"
-                                " near leg (client sells near / buys far)."
-                                " Points-market channels label by the FAR leg"
-                                " instead, so they show the same two-way with"
-                                " the labels swapped — there the bid points"
-                                " read below the offer points."
+                                "Direction is read from the numbers, not the"
+                                " venue's labels: the side with the"
+                                " algebraically higher far-minus-near"
+                                " differential is the package where the taker"
+                                " sells the base currency on the near leg and"
+                                " buys it back on the far leg — the maker"
+                                " sells the far leg on that side. Only this"
+                                " assignment has the maker earning its"
+                                " bid/offer spread; the reverse would pay it"
+                                " to the taker in both directions."
                             )
+                            if bid_pts > offer_pts:
+                                st.caption(
+                                    "Bid points sit above Offer points here,"
+                                    " so the labels keep their outright"
+                                    " meaning on the NEAR leg (Bid = maker"
+                                    " buys the base currency on the near"
+                                    " leg). Points-market screens label the"
+                                    " same two-way from the FAR leg, so their"
+                                    " labels read swapped — there the bid"
+                                    " points sit below the offer points."
+                                )
+                            else:
+                                st.caption(
+                                    "Bid points sit below Offer points here —"
+                                    " points-market convention: the labels"
+                                    " anchor to the FAR leg (Bid = maker buys"
+                                    " the base currency on the far leg)."
+                                )
+                            if trade.venue == "Bloomberg DOR":
+                                st.caption(
+                                    "Formal footing: the ORP spec defines"
+                                    " LegBidPx/LegOfferPx (681/684) only as"
+                                    " each leg's all-in bid/offer rate and"
+                                    " never states which direction a 2-sided"
+                                    " swap quote's columns represent — the"
+                                    " mapping above is derived, not quoted."
+                                    " On orders and fills direction is"
+                                    " explicit instead: Side(54)=B (As"
+                                    " Defined) with per-leg LegSide(624) in"
+                                    " the dealt LegCurrency(556), and legs"
+                                    " sent without LegSide formally mark the"
+                                    " quote as 2-sided."
+                                )
                         if trade.swap_points_source == "computed":
                             st.caption(
                                 "Swap points computed as the far-leg minus"

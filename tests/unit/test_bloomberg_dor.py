@@ -493,6 +493,20 @@ class TestBloombergDORTwoSidedSwapQuote:
         assert trade.bid_swap_points / trade.pip_size == pytest.approx(-12.50, abs=1e-6)
         assert trade.offer_swap_points / trade.pip_size == pytest.approx(-12.65, abs=1e-6)
 
+    def test_taker_direction_labels(self, trade):
+        """Bid points (-12.50) sit above offer points (-12.65), so the Bid
+        column is the taker sell-USD-near / buy-USD-far package — the
+        venue's labels anchor to the NEAR leg. Forced by the maker's
+        spread (the reverse assignment would hand the taker 0.15 pips
+        both ways); the ORP spec itself never defines column direction."""
+        from fxfixparser.core.fx_math import swap_quote_directions
+
+        bid_dir, offer_dir = swap_quote_directions(
+            trade.bid_swap_points, trade.offer_swap_points, trade.base_currency
+        )
+        assert bid_dir == "Sell USD near / buy USD far (S/B)"
+        assert offer_dir == "Buy USD near / sell USD far (B/S)"
+
     def test_declared_points_classified_as_pips_convention(self, trade):
         """The wire values (-8.62 etc.) are pips, not the spec's decimals —
         classify_forward_points must detect that against the all-in/spot."""

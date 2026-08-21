@@ -14,6 +14,7 @@ from fxfixparser.core.fx_math import (
     classify_forward_points,
     parse_symbol,
     pip_size,
+    swap_quote_directions,
     swap_side_actions,
 )
 from fxfixparser.core.parser import FixParser, ParserConfig
@@ -384,3 +385,29 @@ class TestSwapExecutionExtraction:
             "trade_currency",
         ):
             assert key in d, f"Missing swap field: {key}"
+
+
+class TestSwapQuoteDirections:
+    """Label-agnostic taker-direction rule for two-way swap quotes."""
+
+    def test_near_anchored_labels_bid_above_offer(self):
+        # Bloomberg DOR two-sided shape: bid differential above offer.
+        bid_dir, offer_dir = swap_quote_directions(-0.1250, -0.1265, "USD")
+        assert bid_dir == "Sell USD near / buy USD far (S/B)"
+        assert offer_dir == "Buy USD near / sell USD far (B/S)"
+
+    def test_far_anchored_labels_bid_below_offer(self):
+        # Points-market ordering: same two-way, labels flip.
+        bid_dir, offer_dir = swap_quote_directions(0.000150, 0.000152, "EUR")
+        assert bid_dir == "Buy EUR near / sell EUR far (B/S)"
+        assert offer_dir == "Sell EUR near / buy EUR far (S/B)"
+
+    def test_choice_price_and_missing_sides_yield_none(self):
+        assert swap_quote_directions(0.001, 0.001, "USD") == (None, None)
+        assert swap_quote_directions(None, 0.001, "USD") == (None, None)
+        assert swap_quote_directions(0.001, None, "USD") == (None, None)
+
+    def test_generic_wording_when_base_currency_unknown(self):
+        bid_dir, offer_dir = swap_quote_directions(2.0, 1.0, None)
+        assert bid_dir == "Sell base near / buy base far (S/B)"
+        assert offer_dir == "Buy base near / sell base far (B/S)"

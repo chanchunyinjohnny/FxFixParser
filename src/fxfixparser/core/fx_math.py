@@ -104,3 +104,37 @@ def classify_forward_points(
     if abs(declared - implied_pips) <= tol_pips:
         return ("pips", declared)
     return None
+
+
+def swap_quote_directions(
+    bid_points: float | None,
+    offer_points: float | None,
+    base_currency: str | None = None,
+) -> tuple[str | None, str | None]:
+    """Label the price taker's direction on each side of a 2-way swap quote.
+
+    In a coherent two-way FX swap quote, the side whose far-minus-near
+    all-in differential is algebraically higher is the package where the
+    maker sells the base currency on the far leg — i.e. the taker sells
+    the base on the near leg and buys it back on the far leg (S/B); the
+    other side is the reverse (B/S). Any other assignment would have the
+    maker paying its own bid/offer spread to the taker in both
+    directions, so the mapping is forced by the numbers and holds no
+    matter which leg the venue's Bid/Offer labels anchor to: feeds
+    labelled from the near leg (Bloomberg DOR's observed two-sided
+    shape) show bid points above offer points, while points-market feeds
+    labelled from the far leg show the same two-way with bid below
+    offer.
+
+    Returns ``(bid_direction, offer_direction)``, or ``(None, None)``
+    when either side is missing or both sides are equal (a choice price
+    carries no direction information).
+    """
+    if bid_points is None or offer_points is None or bid_points == offer_points:
+        return (None, None)
+    ccy = base_currency or "base"
+    sell_buy = f"Sell {ccy} near / buy {ccy} far (S/B)"
+    buy_sell = f"Buy {ccy} near / sell {ccy} far (B/S)"
+    if bid_points > offer_points:
+        return (sell_buy, buy_sell)
+    return (buy_sell, sell_buy)

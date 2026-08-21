@@ -230,6 +230,38 @@ under both readings and reports which convention it matches — or that it
 matches neither, i.e. the venue's forward points disagree with its own rates.
 The UI surfaces this as the **Forward Point Check** table on swap quotes.
 
+### Which direction is the Bid column?
+
+The ORP spec never says. LegBidPx (681) / LegOfferPx (684) are defined only
+as each leg's "all-in bid/offer rate", and the spec's one-sided
+side-expression tables (§4.2.6.6.1) have no swap equivalent. Direction is
+formally expressed per leg instead — "For FX Swaps and FX NDS: Use Side(54)=B
+(As Defined) and LegSide(624)=1 (Buy) or 2 (Sell) in perspective of the dealt
+LegCurrency(556)" — a Quote whose legs omit LegSide is formally a 2-sided
+quote, and LegID (1788) is formally ordinal (1 = near leg, 2 = far leg).
+
+The column mapping is therefore *derived*, and the quote's own arithmetic
+forces it. Each column is one tradeable package (all-in = spot + that
+column's points, column-consistent). Read the Bid column as "taker sells the
+base currency on the near leg / buys it back on the far leg" and the maker
+earns its spread on both directions; read it the other way round and the
+maker pays the spread to the taker both ways — no tradeable (QuoteType 537=1)
+two-way is priced through itself. Equivalently: the side with the
+algebraically higher far − near differential is always the taker
+sell-near/buy-far side. `fx_math.swap_quote_directions()` implements this
+label-agnostic comparison, so it reads correctly both for near-leg-labelled
+feeds (Bloomberg DOR's observed shape — bid points above offer points, the
+near leg's all-ins in normal bid-below-offer order while the far leg's sit
+inverted) and for far-leg-labelled points-market feeds (bid points below
+offer points).
+
+Executed swap ERs cross-check the picture: DOR fills carry LastSwapPoints
+(1071) exactly equal to far LegLastPx (637) − near LegLastPx (637) (spec:
+"the differential between the far leg's bid/offer and the near leg's
+bid/offer", decimal form), and the parent Side (54) they populate matches the
+far leg's LegSide (624) — an observed wire convention the spec does not
+document.
+
 ## Common FIX Tags Reference
 
 | Tag | Name | Description |
