@@ -337,10 +337,16 @@ class FixParser:
         With ``strict=False`` (used for input converted from a parsed
         report, which is a display rendering and not guaranteed
         byte-faithful), the declared BodyLength and CheckSum values are
-        not verified. Header/trailer ordering checks always apply.
+        not verified, and the framing fields are required only where the
+        rendering actually supplies them — see
+        :meth:`_validate_report_framing`.
         """
         if not message.fields:
             raise ValidationError("Message has no fields")
+
+        if not strict:
+            self._validate_report_framing(message)
+            return
 
         # Check BeginString is first
         if message.fields[0].tag != 8:
@@ -359,12 +365,41 @@ class FixParser:
             raise ValidationError("Message must end with CheckSum (tag 10)")
 
         # Validate declared body length if strict mode
-        if strict and self.config.strict_body_length:
+        if self.config.strict_body_length:
             self._validate_body_length(message, normalized)
 
         # Validate checksum if strict mode
-        if strict and self.config.strict_checksum:
+        if self.config.strict_checksum:
             self._validate_checksum(message, normalized)
+
+    def _validate_report_framing(self, message: FixMessage) -> None:
+        """Validate header/trailer placement for parsed-report input.
+
+        A parsed report renders the application view of a message, not the
+        bytes on the wire. Renderings of messages the client *sent* carry
+        no BodyLength (9) or CheckSum (10) at all, because the session
+        layer stamps those after the message is logged; renderings of
+        received messages carry both. Requiring them would reject the
+        outbound half of a captured conversation, and their values are
+        unverifiable here anyway, so each framing field is checked only
+        for placement and only when present.
+
+        MsgType (35) is always required: without it the message cannot be
+        interpreted.
+        """
+        tags = [field.tag for field in message.fields]
+
+        if 35 not in tags:
+            raise ValidationError("Missing MsgType (tag 35)")
+
+        if 8 in tags and tags[0] != 8:
+            raise ValidationError("BeginString (tag 8) must be the first field")
+
+        if 9 in tags and tags.index(9) != (1 if 8 in tags else 0):
+            raise ValidationError("BodyLength (tag 9) must directly follow BeginString (tag 8)")
+
+        if 10 in tags and tags[-1] != 10:
+            raise ValidationError("CheckSum (tag 10) must be the last field")
 
     def _validate_body_length(self, message: FixMessage, normalized: str) -> None:
         """Validate the declared BodyLength (tag 9).

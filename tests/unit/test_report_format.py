@@ -168,6 +168,17 @@ class TestParsedReportToRaw:
         raw = parsed_report_to_raw(text)
         assert raw == f"8=FIX.4.4{SOH}9=10{SOH}35=0{SOH}10=000{SOH}"
 
+    def test_msgtype_moved_after_begin_string_when_body_length_absent(self) -> None:
+        """Outbound renderings open with 8 alone; 35 follows it directly."""
+        text = (
+            "(8)BeginString: FIXT.1.1\n"
+            "(34)MsgSeqNum: 288\n"
+            "(35)MsgType: QuoteRequest (R)\n"
+            "(55)Symbol: GBP/USD\n"
+        )
+        raw = parsed_report_to_raw(text)
+        assert raw == f"8=FIXT.1.1{SOH}35=R{SOH}34=288{SOH}55=GBP/USD{SOH}"
+
     def test_stray_lines_skipped(self) -> None:
         text = (
             "Copied from log viewer:\n"
@@ -264,17 +275,75 @@ class TestParserAcceptsParsedReport:
 
 
 class TestConvertedReportStructureValidation:
-    """Header/trailer ordering checks must still fire on converted input."""
+    """On converted input the framing checks are placement, not presence.
 
-    def test_report_missing_checksum_still_fails_validation(self) -> None:
+    A parsed report renders the application view of a message. Renderings
+    of messages the client *sent* carry no BodyLength (9) or CheckSum (10)
+    — the session layer stamps those after the message is logged — so
+    those tags are checked only where the report supplies them. MsgType
+    stays mandatory, and raw wire input is unaffected.
+    """
+
+    def test_report_without_body_length_and_checksum_is_accepted(self) -> None:
+        """The shape a vendor report gives for a message the client sent."""
         text = (
             "(8)BeginString: FIXT.1.1\n"
-            "(9)BodyLength: 1\n"
+            "(34)MsgSeqNum: 288\n"
+            "(35)MsgType: QuoteRequest (R)\n"
+            "(55)Symbol: GBP/USD\n"
+        )
+        message = FixParser().parse(text)
+        assert message.msg_type == "R"
+        assert message.begin_string == "FIXT.1.1"
+        assert message.get_value(55) == "GBP/USD"
+
+    def test_report_without_begin_string_is_accepted(self) -> None:
+        text = (
+            "(34)MsgSeqNum: 289\n"
+            "(35)MsgType: QuoteResponse (AJ)\n"
+            "(55)Symbol: GBP/USD\n"
+            "(694)QuoteRespType: Hit (1)\n"
+        )
+        message = FixParser().parse(text)
+        assert message.msg_type == "AJ"
+        assert message.get_value(694) == "1"
+
+    def test_report_begin_string_not_first_fails(self) -> None:
+        text = (
+            "(34)MsgSeqNum: 1\n"
+            "(8)BeginString: FIXT.1.1\n"
             "(35)MsgType: ExecutionReport (8)\n"
             "(55)Symbol: GBP/USD\n"
         )
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="BeginString"):
             FixParser().parse(text)
+
+    def test_report_body_length_not_after_begin_string_fails(self) -> None:
+        text = (
+            "(8)BeginString: FIXT.1.1\n"
+            "(35)MsgType: ExecutionReport (8)\n"
+            "(9)BodyLength: 100\n"
+            "(55)Symbol: GBP/USD\n"
+        )
+        with pytest.raises(ValidationError, match="BodyLength"):
+            FixParser().parse(text)
+
+    def test_report_checksum_not_last_fails(self) -> None:
+        text = (
+            "(8)BeginString: FIXT.1.1\n"
+            "(9)BodyLength: 100\n"
+            "(35)MsgType: ExecutionReport (8)\n"
+            "(10)CheckSum: 000\n"
+            "(55)Symbol: GBP/USD\n"
+        )
+        with pytest.raises(ValidationError, match="CheckSum"):
+            FixParser().parse(text)
+
+    def test_raw_input_still_requires_full_framing(self) -> None:
+        """The relaxation is scoped to converted reports, not the wire."""
+        raw = SOH.join(["8=FIXT.1.1", "35=R", "55=GBP/USD"]) + SOH
+        with pytest.raises(ValidationError, match="BodyLength"):
+            FixParser().parse(raw)
 
     def test_report_missing_msgtype_still_fails_validation(self) -> None:
         text = (

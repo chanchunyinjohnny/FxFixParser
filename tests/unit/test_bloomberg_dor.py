@@ -859,3 +859,99 @@ class TestBloombergMAPSwapExec:
         assert trade.near_leg_action == "Sell USD"
         assert trade.far_leg_action == "Buy USD"
         assert trade.swap_side_source == "legs"
+
+
+class TestBloombergDORQuoteResponseParsedReport:
+    """A DOR swap quote acceptance as a vendor 'parsed report' export.
+
+    This is the shape a captured RFS conversation gives for the messages
+    the client *sent*: the report is a pretty-printed application view,
+    tags are sorted numerically within each section, and the session
+    layer's BodyLength (9) and CheckSum (10) are absent because they are
+    stamped after the message is logged. The accepted rate lives in the
+    side taken (681 LegBidPx / 188 BidSpotRate), not in a fill's 637/194.
+    """
+
+    QUOTE_RESPONSE_REPORT = (
+        "(8)BeginString: FIXT.1.1\n"
+        "(34)MsgSeqNum: 289\n"
+        "(35)MsgType: QuoteResponse (AJ)\n"
+        "(49)SenderCompID: ORP_BCQT_B\n"
+        "(52)SendingTime: 20240115-10:31:27.233\n"
+        "(56)TargetCompID: BLPORPBETA\n"
+        "(115)OnBehalfOfCompID: DOR (DOR)\n"
+        "(128)DeliverToCompID: DOR (DOR)\n"
+        "(1128)ApplVerID: FIX50SP2 (9)\n"
+        "(11)ClOrdID: CL200\n"
+        "(54)Side: Sell (2)\n"
+        "(55)Symbol: EUR/USD\n"
+        "(117)QuoteID: Q200-DOR2-4\n"
+        "(131)QuoteReqID: REQ200\n"
+        "(167)SecurityType: FXSwap (FXSWAP)\n"
+        "(188)BidSpotRate: 1.08500\n"
+        "(453)NoPartyIDs: 1\n"
+        "  (447)PartyIDSource: Proprietary (D)\n"
+        "  (448)PartyID: DOR2\n"
+        "  (452)PartyRole: ExecutingFirm (1)\n"
+        "  (460)Product: CURRENCY (4)\n"
+        "  (693)QuoteRespID: CL200\n"
+        "  (694)QuoteRespType: Hit (1)\n"
+        "(555)NoLegs: 2\n"
+        "  (556)LegCurrency: EUR\n"
+        "  (588)LegSettlDate: 20240117\n"
+        "  (600)LegSymbol: EUR/USD\n"
+        "  (609)LegSecurityType: FXForward (FXFWD)\n"
+        "  (624)LegSide: Buy (1)\n"
+        "  (681)LegBidPx: 1.08500\n"
+        "  (685)LegOrderQty: 10000000\n"
+        "    ----\n"
+        "  (556)LegCurrency: EUR\n"
+        "  (588)LegSettlDate: 20240415\n"
+        "  (600)LegSymbol: EUR/USD\n"
+        "  (609)LegSecurityType: FXForward (FXFWD)\n"
+        "  (624)LegSide: Sell (2)\n"
+        "  (681)LegBidPx: 1.09000\n"
+        "  (685)LegOrderQty: 10000000\n"
+    )
+
+    def test_parses_without_body_length_or_checksum(self):
+        message = FixParser().parse(self.QUOTE_RESPONSE_REPORT, auto_detect_venue=True)
+
+        assert message.converted_from_report is True
+        assert message.venue == "Bloomberg DOR"
+        assert message.msg_type == "AJ"
+        assert message.get_value(9) is None
+        assert message.get_value(10) is None
+
+    def test_message_level_tags_stay_out_of_the_party_group(self):
+        """460/693/694 are indented under a party entry by the report's
+        numeric sort, but they are message-level fields."""
+        message = FixParser().parse(self.QUOTE_RESPONSE_REPORT, auto_detect_venue=True)
+
+        top_level = {sf.field.tag for sf in message.get_structured_fields() if sf.field}
+        assert {460, 693, 694} <= top_level
+
+        parties = [
+            sf.group
+            for sf in message.get_structured_fields()
+            if sf.is_group and sf.group and sf.group.count_field.tag == 453
+        ]
+        assert len(parties) == 1
+        assert [f.tag for f in parties[0].entries[0].fields] == [447, 448, 452]
+
+    def test_extract_trade_prices_the_accepted_side(self):
+        handler = BloombergDORHandler()
+        message = FixParser().parse(self.QUOTE_RESPONSE_REPORT, venue=handler)
+        trade = handler.extract_trade(message)
+
+        assert trade.is_swap is True
+        assert trade.symbol == "EUR/USD"
+        assert trade.settlement_date == "20240117"
+        assert trade.far_settlement_date == "20240415"
+        assert trade.spot_rate == pytest.approx(1.08500)
+        assert trade.near_leg_price == pytest.approx(1.08500)
+        assert trade.far_leg_price == pytest.approx(1.09000)
+        assert trade.swap_points_pips == pytest.approx(50.0, abs=1e-6)
+        assert trade.near_leg_action == "Buy EUR"
+        assert trade.far_leg_action == "Sell EUR"
+        assert trade.swap_side_source == "legs"

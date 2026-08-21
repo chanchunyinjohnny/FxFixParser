@@ -54,6 +54,15 @@ def _order_legs_near_far(
     return dated[0][2], dated[-1][2]
 
 
+def _leg_price(leg: dict[str, str]) -> str | None:
+    """Return a leg's traded price from whichever tag carries it.
+
+    Fills use 637 LegLastPx (or 566 LegPrice). A quote acceptance prices
+    only the side it takes, in 681 LegBidPx or 684 LegOfferPx.
+    """
+    return leg.get("637") or leg.get("566") or leg.get("681") or leg.get("684")
+
+
 def _leg_action(leg: dict[str, str], base: str | None, term: str | None) -> str | None:
     """Build a leg action string from an explicit LegSide (624).
 
@@ -210,8 +219,12 @@ class VenueHandler(ABC):
             near, far = _order_legs_near_far(leg_entries)
             trade.settlement_date = near.get("588") or trade.settlement_date
             trade.far_settlement_date = far.get("588")
-            trade.near_leg_price = _to_float(near.get("637") or near.get("566"))
-            trade.far_leg_price = _to_float(far.get("637") or far.get("566"))
+            # Leg price: 637 LegLastPx / 566 LegPrice on a fill, then the
+            # side actually taken on a quote acceptance (35=AJ), which
+            # prices only the side it hits — 681 LegBidPx or 684
+            # LegOfferPx, never both (a two-way price is a Quote, 35=S).
+            trade.near_leg_price = _to_float(_leg_price(near))
+            trade.far_leg_price = _to_float(_leg_price(far))
             # Leg quantity: 687 LegQty (FIX 4.4), then 685 LegOrderQty
             # (FIX 5.0+), then 1418 LegLastQty (executed amount) — Bloomberg
             # DOR executions carry 685/1418 but never 687.
@@ -233,10 +246,11 @@ class VenueHandler(ABC):
             trade.far_quantity = _to_float(far_qty_str)
 
         # Spot rate: tag 194 LastSpotRate is the fill spot rate for the
-        # swap (a swap has a single common spot anchoring both legs).
-        # Falls back to the near leg price, which equals the spot rate
-        # when near = spot date.
-        spot_str = message.get_value(194)
+        # swap (a swap has a single common spot anchoring both legs). A
+        # quote acceptance carries the side it took instead — 188
+        # BidSpotRate or 190 OfferSpotRate. Falls back to the near leg
+        # price, which equals the spot rate when near = spot date.
+        spot_str = message.get_value(194) or message.get_value(188) or message.get_value(190)
         trade.spot_rate = _to_float(spot_str) if spot_str else trade.near_leg_price
 
         # Swap points precedence:

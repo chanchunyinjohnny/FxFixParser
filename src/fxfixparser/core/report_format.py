@@ -88,17 +88,22 @@ def parsed_report_to_raw(text: str) -> str:
 
 
 def _restore_msg_type_position(pairs: list[tuple[int, str]]) -> None:
-    """Move MsgType(35) to third position when displaced by numeric sorting.
+    """Move MsgType(35) directly after the leading framing fields.
 
     Reports sort tags numerically, so MsgSeqNum(34) lands before 35 and
-    the header-order validation (8, 9, 35) would fail. Only reorders when
-    the report starts with tags 8 and 9 as expected; otherwise the order
-    is left for parse-time validation to report.
+    the conventional header order (8, 9, 35) is lost. The framing prefix
+    is whichever of BeginString(8) and BodyLength(9) the report actually
+    opens with: renderings of messages the client *sent* omit 9 (and the
+    trailing CheckSum), because the session layer stamps those after the
+    message is logged. MsgType is placed immediately after that prefix,
+    so 8/35 and 8/9/35 both come out in header order.
     """
-    if len(pairs) < 3 or pairs[0][0] != 8 or pairs[1][0] != 9:
-        return
+    prefix_len = 0
+    for expected in (8, 9):
+        if prefix_len < len(pairs) and pairs[prefix_len][0] == expected:
+            prefix_len += 1
     for index, (tag, _value) in enumerate(pairs):
         if tag == 35:
-            if index > 2:
-                pairs.insert(2, pairs.pop(index))
+            if index > prefix_len:
+                pairs.insert(prefix_len, pairs.pop(index))
             return
