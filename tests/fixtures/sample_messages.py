@@ -236,14 +236,17 @@ BLOOMBERG_DOR_SPOT_RFQ = (
 # Bloomberg DOR FX Swap QuoteStatusReport (35=AI).
 # Exercises a nested NoPartySubIDs (802) group inside the first party
 # (carrying a Legal Entity Identifier) and a 555 NoLegs group whose legs
-# include FIX 5.0+ tags (587 LegSettlType, 1788 LegID). Used to verify
-# that party + leg counts are detected correctly.
+# include FIX 5.0+ tags (587 LegSettlType, 1788 LegID). Carries the
+# QuoteStatus(297)=0 acknowledgement's Bloomberg trade key in
+# SecondaryQuoteID(1751). Used to verify that party + leg counts are
+# detected correctly. BodyLength and CheckSum are computed.
 BLOOMBERG_DOR_SWAP_QUOTE_STATUS = (
-    "8=FIXT.1.1|9=537|35=AI|34=740|49=BLPORPBETA|"
+    "8=FIXT.1.1|9=553|35=AI|34=740|49=BLPORPBETA|"
     "52=20260529-06:04:13.216393|56=ORP_BCQT_B|115=DOR|128=DOR|"
     "1128=9|1129=1.8|1156=208|"
     "15=EUR|54=1|55=EUR/USD|60=20260529-06:04:13.192|"
     "120=EUR|131=1509920301155225600|167=FXSWAP|297=0|460=4|1300=BTBS|"
+    "1751=9876543210|"
     "453=4|"
     "447=D|448=67e626b081740000|452=13|"
     "802=1|523=KNPC1X7GHDZW8U2ZSF89|803=4025|"
@@ -255,7 +258,7 @@ BLOOMBERG_DOR_SWAP_QUOTE_STATUS = (
     "624=2|685=1000000|1788=1|"
     "556=EUR|587=B|588=20260625|600=EUR/USD|607=4|609=FXFWD|"
     "624=1|685=1000000|1788=2|"
-    "10=000|"
+    "10=172|"
 )
 
 # Bloomberg DOR FX Swap QuoteStatusReport (35=AI) with QuoteStatus=Pass (297=11).
@@ -282,6 +285,24 @@ BLOOMBERG_DOR_SWAP_QUOTE_STATUS_PASS = (
     "556=EUR|587=B|588=20260702|600=EUR/USD|607=4|609=FXFWD|"
     "624=2|685=1000000|1788=2|"
     "10=034|"
+)
+
+# Bloomberg DOR FX Swap QuoteStatusReport (35=AI) rejecting a taker hit/lift:
+# QuoteStatus(297)=5 (Rejected) with QuoteRejectReason(300)=114 (Maker rejection).
+# Per ORP 1.9.8 section 4.2.6.6.6, FX uses 297=5 only for outright rejection and
+# carries the reason in 300. Synthetic message (BodyLength and CheckSum computed)
+# used to verify that the Bloomberg-specific 300 codes decode.
+BLOOMBERG_DOR_SWAP_QUOTE_STATUS_REJECT = (
+    "8=FIXT.1.1|9=331|35=AI|34=6944|49=BLPORPBETA|"
+    "52=20260602-14:53:10.114275|56=ORP_BCQT_B|115=DOR|128=DOR|"
+    "1128=9|1129=1.8|1156=208|"
+    "15=EUR|54=2|55=EUR/USD|58=Maker rejection|60=20260602-14:53:10.098|"
+    "131=1511502890232057856|167=FXSWAP|297=5|300=114|460=4|"
+    "693=UDH1511502899568578561|1300=BTBS|"
+    "453=2|"
+    "447=D|448=67e626b081740000|452=13|"
+    "447=D|448=DOR1|452=1|"
+    "10=020|"
 )
 
 # Bloomberg DOR FX Swap Quote (35=S) — dealer response carrying per-leg

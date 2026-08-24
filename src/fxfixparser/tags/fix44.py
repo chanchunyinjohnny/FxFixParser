@@ -953,10 +953,10 @@ FIX44_TAGS: list[FixFieldDefinition] = [
         },
     ),
     FixFieldDefinition(
-        694, "QuoteRespID", "STRING", "Quote response identifier. Unique ID for the quote response."
+        693, "QuoteRespID", "STRING", "Quote response identifier. Unique ID for the quote response."
     ),
     FixFieldDefinition(
-        695,
+        694,
         "QuoteRespType",
         "INT",
         "Quote response type. Type of quote response.",

@@ -17,6 +17,7 @@ from tests.fixtures.sample_messages import (
     BLOOMBERG_DOR_SWAP_QUOTE_RESPONSE,
     BLOOMBERG_DOR_SWAP_QUOTE_STATUS,
     BLOOMBERG_DOR_SWAP_QUOTE_STATUS_PASS,
+    BLOOMBERG_DOR_SWAP_QUOTE_STATUS_REJECT,
     BLOOMBERG_DOR_SWAP_QUOTE_TWO_SIDED,
     BLOOMBERG_MAP_SWAP_EXEC,
 )
@@ -595,6 +596,78 @@ class TestBloombergDORQuoteStatusPass:
         for leg in (leg1, leg2):
             product = next(f for f in leg.fields if f.tag == 607)
             assert product.value_description == "CURRENCY"
+
+
+class TestBloombergDORQuoteStatusReject:
+    """QuoteStatusReport (35=AI) rejecting a hit/lift.
+
+    Covers the Bloomberg-specific QuoteStatus(297) and QuoteRejectReason(300)
+    codes that sit above the standard FIX 4.4 range (ORP 1.9.8, QuoteStatusReport
+    message table), which the venue supplies through enum_extensions.
+    """
+
+    @pytest.fixture
+    def parser(self):
+        return FixParser(config=ParserConfig(strict_checksum=False))
+
+    def test_reject_reason_decodes(self, parser):
+        """297=5 (Rejected) with the DOR-specific 300=114 (Maker rejection)."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_QUOTE_STATUS_REJECT, venue="Bloomberg DOR")
+
+        status = next(f for f in message.fields if f.tag == 297)
+        assert status.value_description == "Rejected"
+
+        reason = next(f for f in message.fields if f.tag == 300)
+        assert reason.name == "QuoteRejectReason"
+        assert reason.value_description == "Maker rejection"
+
+    def test_quote_resp_id_named(self, parser):
+        """693 is QuoteRespID on the wire — it must not resolve to QuoteRespType."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_QUOTE_STATUS_REJECT, venue="Bloomberg DOR")
+        resp_id = next(f for f in message.fields if f.tag == 693)
+        assert resp_id.name == "QuoteRespID"
+
+    def test_quote_negotiation_identifiers_defined(self, parser):
+        """SecondaryQuoteID(1751), RejectText(1328) and QuoteRespRefID(22335)
+        are absent from FIX 4.4, so the venue must supply them — otherwise the
+        trade key on a QuoteStatus(297)=0 acknowledgement reads as Unknown."""
+        message = parser.parse(BLOOMBERG_DOR_SWAP_QUOTE_STATUS, venue="Bloomberg DOR")
+        trade_key = next(f for f in message.fields if f.tag == 1751)
+        assert trade_key.name == "SecondaryQuoteID"
+        assert trade_key.raw_value == "9876543210"
+
+        dictionary = BloombergDORHandler().custom_tags
+        by_tag = {d.tag: d.name for d in dictionary}
+        assert by_tag[1751] == "SecondaryQuoteID"
+        assert by_tag[1328] == "RejectText"
+        assert by_tag[22335] == "QuoteRespRefID"
+
+    def test_dor_status_and_reason_codes_available(self):
+        """Every DOR-supported 297/300 code above the FIX 4.4 range decodes,
+        without dropping the standard codes the base dictionary supplies."""
+        handler = BloombergDORHandler()
+        extensions = handler.enum_extensions
+
+        assert extensions[297] == {
+            "100": "Response timed out",
+            "101": "Trade ended",
+            "104": "Begin spot",
+            "105": "Due In Time lifted",
+            "106": "Total Trade Time exceeded",
+            "108": "Dealers added",
+            "109": "Unpass",
+            "110": "Trader changed",
+            "111": "Transitioned to manual",
+        }
+        assert extensions[300] == {
+            "110": "Best execution not supported",
+            "111": "Dealer left the negotiation",
+            "112": "Trade previously filled or ended",
+            "113": "Another hit/lift is pending",
+            "114": "Maker rejection",
+            "115": "Negotiation system rejection",
+            "116": "Trade record not found",
+        }
 
 
 class TestBloombergDORSpotExecFull:

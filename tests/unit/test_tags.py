@@ -101,6 +101,26 @@ class TestFIX44Tags:
         tag_numbers = {t.tag for t in FIX44_TAGS}
         assert 10 in tag_numbers  # CheckSum
 
+    def test_quote_response_tag_numbers(self) -> None:
+        """693/694/695 must carry their real FIX 4.4 identities.
+
+        The curated overrides were previously shifted one tag up, so 694
+        resolved to QuoteRespID and the QuoteRespType enum landed on 695
+        (really QuoteQualifier). QuoteRespType(694)=1 is the hit/lift marker
+        on every Bloomberg DOR QuoteResponse (35=AJ), so it must decode.
+        """
+        d = TagDictionary.default()
+
+        assert d.get_name(693) == "QuoteRespID"
+        assert d.get_name(694) == "QuoteRespType"
+        assert d.get_name(695) == "QuoteQualifier"
+
+        resp_type = d.get(694)
+        assert resp_type is not None
+        assert resp_type.get_value_description("1") == "HitLift"
+        assert resp_type.get_value_description("2") == "Counter"
+        assert resp_type.get_value_description("6") == "Pass"
+
 
 class TestFXCustomTags:
     """Tests for FX-specific custom tags."""

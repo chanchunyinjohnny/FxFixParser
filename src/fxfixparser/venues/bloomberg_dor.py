@@ -116,6 +116,37 @@ _BLOOMBERG_CUSTOM_TAGS: dict[int, FixFieldDefinition] = {
         field_type="BOOLEAN",
         description="Distinguishes staged orders from inquiries.",
     ),
+    # Quote negotiation identifiers, carried on Quote (35=S), QuoteResponse
+    # (35=AJ) and QuoteStatusReport (35=AI). SecondaryQuoteID(1751) and
+    # RejectText(1328) are standard FIX 5.0 fields Bloomberg adds to these
+    # messages; neither is in the bundled FIX 4.4 dictionary.
+    1751: FixFieldDefinition(
+        tag=1751,
+        name="SecondaryQuoteID",
+        field_type="STRING",
+        description=(
+            "Bloomberg trade key for the transaction. Returned on "
+            "QuoteStatusReport (35=AI) when QuoteStatus(297)=0 (Accepted), and "
+            "usable on the Bloomberg Terminal to view further trade details."
+        ),
+    ),
+    1328: FixFieldDefinition(
+        tag=1328,
+        name="RejectText",
+        field_type="STRING",
+        description="Plain-text reject reason, sent when QuoteRejectReason(300)=99 (Other).",
+    ),
+    22335: FixFieldDefinition(
+        tag=22335,
+        name="QuoteRespRefID",
+        field_type="STRING",
+        description=(
+            "Reverses a QuoteResponse (35=AJ) hit/lift in the order-based model "
+            "when the original message did not reference a QuoteID(117); refers "
+            "to the QuoteRespID(693) being canceled. Fixed income only — the "
+            "ORP 1.9.8 QuoteResponse table marks this field [FI], not [FX]."
+        ),
+    ),
     22923: FixFieldDefinition(
         tag=22923,
         name="ManualTicket",
@@ -441,6 +472,34 @@ class BloombergDORHandler(VenueHandler):
                 "4025": "Legal Entity Identifier",
                 "4046": "Liquidity maker",
                 "4047": "Liquidity taker",
+            },
+            # QuoteStatus: ORP/DOR codes above the standard FIX 4.4 range, sent
+            # on QuoteStatusReport (35=AI) to report the outcome of a taker's
+            # QuoteResponse (35=AJ) hit/lift. The standard codes DOR also uses
+            # (0 Accepted, 4 Canceled all, 5 Rejected, 7 Expired "dealer goes
+            # subject", 11 Pass "dealer rejects", 17 Canceled) come from FIX 4.4.
+            297: {
+                "100": "Response timed out",
+                "101": "Trade ended",
+                "104": "Begin spot",
+                "105": "Due In Time lifted",
+                "106": "Total Trade Time exceeded",
+                "108": "Dealers added",
+                "109": "Unpass",
+                "110": "Trader changed",
+                "111": "Transitioned to manual",
+            },
+            # QuoteRejectReason: ORP/DOR codes accompanying QuoteStatus(297)=5
+            # (Rejected). 8 (Invalid price) and 99 (Other) come from FIX 4.4;
+            # when 300=99 the plain-text reason is carried in RejectText(1328).
+            300: {
+                "110": "Best execution not supported",
+                "111": "Dealer left the negotiation",
+                "112": "Trade previously filled or ended",
+                "113": "Another hit/lift is pending",
+                "114": "Maker rejection",
+                "115": "Negotiation system rejection",
+                "116": "Trade record not found",
             },
         }
 
