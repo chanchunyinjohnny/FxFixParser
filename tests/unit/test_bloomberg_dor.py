@@ -125,6 +125,72 @@ class TestBloombergDORCustomTags:
         assert "BSEF" in market_segment.valid_values
         assert "XOFF" in market_segment.valid_values
 
+    def test_trade_publish_indicator_resolves(self) -> None:
+        """TradePublishIndicator (1390) is a standard FIX 5.0 SP2 field DOR
+        sends on drop-copy execution reports. It is absent from the bundled
+        FIX 4.4 dictionary, so the venue must define it or it renders as
+        Unknown(1390)."""
+        handler = BloombergDORHandler()
+        tags_by_number = {t.tag: t for t in handler.custom_tags}
+
+        assert 1390 in tags_by_number
+        publish = tags_by_number[1390]
+        assert publish.name == "TradePublishIndicator"
+        assert publish.field_type == "INT"
+        assert publish.valid_values["0"] == "Do not publish trade"
+        assert publish.valid_values["1"] == "Publish trade"
+
+    def test_session_layer_messages_claim_the_dor_venue(self) -> None:
+        """Logon/Heartbeat/TestRequest/Logout must resolve to Bloomberg DOR.
+
+        Session-layer messages carry no 115/128 routing markers and no
+        ApplVerID(1128), so every application-layer claim misses them and they
+        used to come back with no venue at all. The ORP spec fixes the Bloomberg
+        side of the session to BLPORPPROD/BLPORPUAT/BLPORPBETA, which is
+        Bloomberg-specific enough to claim on by itself.
+        """
+        handler = BloombergDORHandler()
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+
+        session_messages = {
+            "A": (
+                "8=FIXT.1.1|9=88|35=A|34=1|49=ORP_BCQT_B|52=20260823-21:00:02.674|"
+                "56=BLPORPBETA|98=0|108=60|141=Y|1137=9|10=202|"
+            ),
+            "0": (
+                "8=FIXT.1.1|9=0068|35=0|49=BLPORPBETA|56=ORP_BCQT_B|34=947|"
+                "52=20260823-16:00:32.220060|10=142|"
+            ),
+            "1": (
+                "8=FIXT.1.1|9=0094|35=1|49=BLPORPBETA|56=ORP_BCQT_B|34=2|"
+                "52=20260823-21:00:02.795155|112=L.0001.0002.0002.210002|10=107|"
+            ),
+            "5": (
+                "8=FIXT.1.1|9=83|35=5|34=1247|49=ORP_BCQT_B|52=20260823-21:00:00.674|"
+                "56=BLPORPBETA|58=Session reset|10=154|"
+            ),
+        }
+        for msg_type, raw in session_messages.items():
+            message = parser.parse(raw, auto_detect_venue=True)
+            assert message.msg_type == msg_type
+            assert handler.claims_message(message), msg_type
+            assert message.venue == "Bloomberg DOR", msg_type
+
+    def test_default_appl_ver_id_resolves_on_logon(self) -> None:
+        """DefaultApplVerID(1137) declares the session's application version on
+        the Logon; without a definition it rendered as Unknown(1137)."""
+        parser = FixParser(config=ParserConfig(strict_checksum=False))
+        message = parser.parse(
+            "8=FIXT.1.1|9=88|35=A|34=1|49=ORP_BCQT_B|52=20260823-21:00:02.674|"
+            "56=BLPORPBETA|98=0|108=60|141=Y|1137=9|10=202|",
+            auto_detect_venue=True,
+        )
+
+        field = message.get_field(1137)
+        assert field is not None
+        assert field.name == "DefaultApplVerID"
+        assert field.value_description == "FIX 5.0 SP2"
+
     def test_fixt_session_tags_resolve(self) -> None:
         """FIXT 1.1 session tags 1128/1129/1156 resolve via the shared dictionary."""
         message_str = (

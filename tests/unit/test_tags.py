@@ -121,6 +121,107 @@ class TestFIX44Tags:
         assert resp_type.get_value_description("2") == "Counter"
         assert resp_type.get_value_description("6") == "Pass"
 
+    def test_instrument_leg_group_fields_are_described(self) -> None:
+        """Every InstrumentLeg (555) member of an FX swap quote must carry an
+        explanation.
+
+        FIX44.xml supplies names and types but no description text, so these
+        fields used to render with a blank Description column even though they
+        appear on every Bloomberg DOR swap quote. The descriptions state the FX
+        reading per the ORP spec — notably that the leg prices are all-in rates
+        rather than swap points.
+        """
+        d = TagDictionary.default()
+
+        for tag in (555, 600, 556, 588, 609, 637, 681, 684):
+            definition = d.get(tag)
+            assert definition is not None, tag
+            assert definition.description.strip(), f"tag {tag} has no description"
+
+        assert "near leg" in d.get(555).description
+        assert "far leg" in d.get(555).description
+        for tag in (681, 684, 637):
+            assert "all-in" in d.get(tag).description, tag
+
+    def test_leg_security_type_decodes_fx_values(self) -> None:
+        """LegSecurityType(609) mirrors SecurityType(167): both legs of a DOR
+        swap are reported as FXFWD, which must decode rather than show raw."""
+        d = TagDictionary.default()
+
+        leg_type = d.get(609)
+        assert leg_type is not None
+        assert leg_type.get_value_description("FXFWD") == "FXForward"
+        assert leg_type.get_value_description("FXSPOT") == "FXSpot"
+
+    def test_drop_copy_execution_fields_are_described(self) -> None:
+        """The remaining blank-description fields on a DOR swap drop-copy.
+
+        These six are documented in the ORP spec. Four others on the same
+        message — 144, 654, 687 and 797 — are deliberately left undescribed:
+        the spec has no entry for them (687 appears only in a changelog line
+        recording that it was reverted), and the repo does not invent field
+        semantics.
+        """
+        d = TagDictionary.default()
+
+        for tag in (30, 218, 602, 603, 675, 854):
+            definition = d.get(tag)
+            assert definition is not None, tag
+            assert definition.description.strip(), f"tag {tag} has no description"
+
+        assert "MIC" in d.get(30).description
+        assert "counter currency" in d.get(675).description
+
+    def test_leg_security_id_source_decodes_currency_pair_scheme(self) -> None:
+        """LegSecurityIDSource(603) shares the SecurityIDSource(22) enumeration.
+
+        FIX44.xml gives 603 no values at all, so 6 — the code DOR sends for an
+        FX leg, whose LegSecurityID(602) is a currency pair — used to render
+        undecoded. The ORP spec's own value list for 603 omits 6.
+        """
+        d = TagDictionary.default()
+
+        leg_source = d.get(603)
+        assert leg_source is not None
+        assert leg_source.get_value_description("6") == "ISOCurrencyCode"
+        assert leg_source.get_value_description("A") == "BloombergSymbol"
+
+        # The standard scheme codes must agree with SecurityIDSource(22).
+        security_source = d.get(22)
+        for code, description in security_source.valid_values.items():
+            assert leg_source.get_value_description(code) == description, code
+
+    def test_qty_type_keeps_its_enum(self) -> None:
+        """QtyType(854)=0 (Units) is how FX notionals are expressed; adding a
+        description must not drop the values it already decoded."""
+        d = TagDictionary.default()
+
+        qty_type = d.get(854)
+        assert qty_type is not None
+        assert qty_type.description.strip()
+        assert qty_type.get_value_description("0") == "UNITS"
+        assert qty_type.get_value_description("1") == "CONTRACTS"
+
+    def test_product_and_party_sub_id_keep_their_enums(self) -> None:
+        """Adding descriptions to Product(460) and PartySubIDType(803) must not
+        drop the enum values they already decoded — the curated entry replaces
+        the FIX44.xml one outright, and venue enum extensions layer on top of
+        803 (Bloomberg DOR adds 4025 = LEI)."""
+        d = TagDictionary.default()
+
+        product = d.get(460)
+        assert product is not None
+        assert product.description.strip()
+        assert product.get_value_description("4") == "CURRENCY"
+
+        sub_id_type = d.get(803)
+        assert sub_id_type is not None
+        assert sub_id_type.description.strip()
+        assert sub_id_type.get_value_description("1") == "FIRM"
+
+        for tag in (802, 523):
+            assert d.get(tag).description.strip(), tag
+
 
 class TestFXCustomTags:
     """Tests for FX-specific custom tags."""
@@ -147,6 +248,27 @@ class TestFXCustomTags:
         assert 1027 in tag_numbers
         assert tag_numbers[1027].name == "MDEntryForwardPoints"
         assert tag_numbers[1027].field_type == "PRICEOFFSET"
+
+    def test_default_appl_ver_id_defined(self) -> None:
+        """DefaultApplVerID(1137) is the FIXT 1.1 session tag that Logon(35=A)
+        uses to declare the session's application version. It belongs in the
+        default dictionary, not a venue overlay: a Logon carries no routing
+        markers, so it must resolve even when no venue is detected.
+
+        It shares the ApplVerID(1128) enumeration, so both must decode 10
+        (FIXLatest), which the ORP spec now prefers over 9 (FIX50SP2).
+        """
+        tags_by_number = {t.tag: t for t in FX_CUSTOM_TAGS}
+
+        assert 1137 in tags_by_number
+        default_ver = tags_by_number[1137]
+        assert default_ver.name == "DefaultApplVerID"
+        assert default_ver.field_type == "STRING"
+        assert default_ver.description.strip()
+        assert default_ver.get_value_description("9") == "FIX 5.0 SP2"
+        assert default_ver.get_value_description("10") == "FIXLatest"
+
+        assert tags_by_number[1128].get_value_description("10") == "FIXLatest"
 
 
 class TestSmartTradeVendorTags:

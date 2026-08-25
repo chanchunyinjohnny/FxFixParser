@@ -358,6 +358,28 @@ FX_CUSTOM_TAGS: list[FixFieldDefinition] = [
             "7": "FIX 5.0",
             "8": "FIX 5.0 SP1",
             "9": "FIX 5.0 SP2",
+            "10": "FIXLatest",
+        },
+    ),
+    FixFieldDefinition(
+        1137,
+        "DefaultApplVerID",
+        "STRING",
+        "Default Application Version ID. The default version of FIX messages used in this "
+        "session, agreed on the Logon(35=A) message; it applies to any application message "
+        "that omits ApplVerID(1128). Shares the ApplVerID enumeration.",
+        {
+            "0": "FIX 2.7",
+            "1": "FIX 3.0",
+            "2": "FIX 4.0",
+            "3": "FIX 4.1",
+            "4": "FIX 4.2",
+            "5": "FIX 4.3",
+            "6": "FIX 4.4",
+            "7": "FIX 5.0",
+            "8": "FIX 5.0 SP1",
+            "9": "FIX 5.0 SP2",
+            "10": "FIXLatest",
         },
     ),
     FixFieldDefinition(

@@ -35,6 +35,14 @@ _DOR_ROUTING_IDS = {"DOR", "FXOM", "ORP", "BLOOMBERG_DOR", "BBGDOR"}
 # with MAP_BLP (BLP = Bloomberg L.P.), e.g. MAP_BLP_BETA in UAT.
 _MAP_BLOOMBERG_PREFIX = "MAP_BLP"
 
+# The Bloomberg side of a direct ORP/DOR session. The ORP spec fixes this CompID
+# per environment — BLPORPPROD (production), BLPORPUAT (UAT), BLPORPBETA (beta) —
+# while the counterparty side is bilaterally agreed and so varies per client.
+# Matching the prefix identifies the session from either direction, including on
+# session-layer messages (Logon, Heartbeat, TestRequest, Logout) that carry no
+# 115/128 routing markers and no ApplVerID to claim on.
+_ORP_BLOOMBERG_PREFIX = "BLPORP"
+
 # Bloomberg DOR custom tag definitions for FX-specific fields.
 # Standard FIX tags (e.g. 8, 35, 55, 167) are covered by FIX44.xml.
 _BLOOMBERG_CUSTOM_TAGS: dict[int, FixFieldDefinition] = {
@@ -263,6 +271,22 @@ _BLOOMBERG_CUSTOM_TAGS: dict[int, FixFieldDefinition] = {
             "RegulatoryLegRefID (2411) and AllocLegRefID (2727). For FX "
             "swaps this is an ordinal: 1 = near leg, 2 = far leg."
         ),
+    ),
+    # TradePublishIndicator is a standard FIX 5.0 SP2 field (also listed in the
+    # ORP spec) that DOR sends on drop-copy execution reports to say whether the
+    # trade is published to the market; it is not in the bundled FIX 4.4
+    # dictionary. Name, type and codes come from the bundled FIX50SP2.xml.
+    1390: FixFieldDefinition(
+        tag=1390,
+        name="TradePublishIndicator",
+        field_type="INT",
+        description="Whether the trade is reported (published) to the market.",
+        valid_values={
+            "0": "Do not publish trade",
+            "1": "Publish trade",
+            "2": "Deferred publication",
+            "3": "Published",
+        },
     ),
     # Regulatory trade IDs (NoRegulatoryTradeIDs group + the flat package-level
     # copies MAP execution reports emit before the 1907 count).
@@ -517,6 +541,11 @@ class BloombergDORHandler(VenueHandler):
         comp_ids = {(message.get_value(tag) or "").upper() for tag in (49, 56, 115, 128)}
         # Bloomberg MAP gateway (FIX 4.4 flavor of the ORP/DOR dialect).
         if any(cid.startswith(_MAP_BLOOMBERG_PREFIX) for cid in comp_ids):
+            return True
+        # Direct ORP/DOR session: the BLPORP* CompID is Bloomberg-specific on its
+        # own, so it claims session-layer messages too, which carry none of the
+        # 115/128/ApplVerID markers the application-layer checks below rely on.
+        if any(cid.startswith(_ORP_BLOOMBERG_PREFIX) for cid in comp_ids):
             return True
         if comp_ids.isdisjoint(_BLOOMBERG_COMP_IDS):
             return False

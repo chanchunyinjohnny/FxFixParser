@@ -371,6 +371,28 @@ FIX44_TAGS: list[FixFieldDefinition] = [
             "FXNDF": "FXNonDeliverableForward",
         },
     ),
+    FixFieldDefinition(
+        460,
+        "Product",
+        "INT",
+        "High-level security classification code for the instrument. FX instruments are "
+        "classified as 4 (Currency).",
+        {
+            "1": "AGENCY",
+            "2": "COMMODITY",
+            "3": "CORPORATE",
+            "4": "CURRENCY",
+            "5": "EQUITY",
+            "6": "GOVERNMENT",
+            "7": "INDEX",
+            "8": "LOAN",
+            "9": "MONEYMARKET",
+            "10": "MORTGAGE",
+            "11": "MUNICIPAL",
+            "12": "OTHER",
+            "13": "FINANCING",
+        },
+    ),
     # Price/Quantity fields
     FixFieldDefinition(
         31,
@@ -418,6 +440,25 @@ FIX44_TAGS: list[FixFieldDefinition] = [
         "MaxFloor",
         "QTY",
         "Maximum floor. Maximum quantity to display in the market (iceberg orders).",
+    ),
+    FixFieldDefinition(
+        854,
+        "QtyType",
+        "INT",
+        "How the quantities in this message are expressed. FX notionals are units of the dealt "
+        "currency (0); ContractMultiplier(231) is required when the value is 1 (Contracts).",
+        {
+            "0": "UNITS",
+            "1": "CONTRACTS",
+        },
+    ),
+    FixFieldDefinition(
+        218,
+        "Spread",
+        "PRICEOFFSET",
+        "Price spread. The ORP spec defines this only for fixed income — the spread on the "
+        "floating leg of an IRS defined using FIX fields — so it carries no FX rate meaning "
+        "and is not the FX swap points, which are reported in the leg forward-point fields.",
     ),
     # Currency/Settlement fields
     FixFieldDefinition(
@@ -620,6 +661,14 @@ FIX44_TAGS: list[FixFieldDefinition] = [
             "99": "Other",
         },
     ),
+    FixFieldDefinition(
+        30,
+        "LastMkt",
+        "EXCHANGE",
+        "Market of execution. When ExecType(150)=F (Trade), the ISO 10383 MIC of the market "
+        "where the trade was executed — e.g. XOFF for an off-exchange trade. The code list is "
+        "the ISO registry rather than a fixed FIX enumeration.",
+    ),
     # Text/misc fields
     FixFieldDefinition(
         58,
@@ -779,6 +828,118 @@ FIX44_TAGS: list[FixFieldDefinition] = [
     FixFieldDefinition(
         646, "MidYield", "PERCENTAGE", "Mid yield. The middle yield between bid and offer yields."
     ),
+    # InstrumentLeg (NoLegs) group fields. FIX44.xml supplies the names and
+    # types but no descriptions; these are the FX readings, per the Bloomberg
+    # ORP/DOR specification, of how each leg field is populated on a swap.
+    FixFieldDefinition(
+        555,
+        "NoLegs",
+        "NUMINGROUP",
+        "Number of instrument leg entries that follow. An FX Swap carries two: the first entry "
+        "is the near leg and the second is the far leg.",
+    ),
+    FixFieldDefinition(
+        600,
+        "LegSymbol",
+        "STRING",
+        "Leg symbol. For FX this is the leg's currency pair, in CCY1/CCY2 format.",
+    ),
+    FixFieldDefinition(
+        556,
+        "LegCurrency",
+        "CURRENCY",
+        "Currency associated with the instrument leg, as an ISO 4217 three-character code. "
+        "For FX this is the dealt currency of the leg.",
+    ),
+    FixFieldDefinition(
+        675,
+        "LegSettlCurrency",
+        "CURRENCY",
+        "Settlement currency for the leg. For a deliverable FX pair this is the counter "
+        "currency; for an NDF it is the currency the leg settles in, with the counter currency "
+        "reported separately in LegCalculatedCurrency(22263).",
+    ),
+    FixFieldDefinition(
+        602,
+        "LegSecurityID",
+        "STRING",
+        "Security identifier for the leg, of the type named by LegSecurityIDSource(603). For "
+        "an FX leg this is the currency pair.",
+    ),
+    FixFieldDefinition(
+        603,
+        "LegSecurityIDSource",
+        "STRING",
+        "Identifies the scheme that LegSecurityID(602) is expressed in. Shares the "
+        "SecurityIDSource(22) enumeration; FX legs use 6 (ISO currency code), which the ORP "
+        "spec's own fixed-income-oriented value list omits.",
+        {
+            "1": "CUSIP",
+            "2": "SEDOL",
+            "3": "QUIK",
+            "4": "ISINNumber",
+            "5": "RICCode",
+            "6": "ISOCurrencyCode",
+            "7": "ISOCountryCode",
+            "8": "ExchangeSymbol",
+            "9": "ConsolidatedTapeAssociation",
+            "A": "BloombergSymbol",
+            "B": "Wertpapier",
+            "C": "Dutch",
+            "D": "Valoren",
+            "E": "Sicovam",
+            "F": "Belgian",
+            "G": "Common",
+            "H": "ClearingHouse",
+            "I": "ISDAFpML",
+            "J": "OptionPriceReporting",
+            "M": "MarketplaceAssignedIdentifier",
+            "P": "MarkitREDPairCLIP",
+            "S": "FinancialInstrumentGlobalIdentifier",
+        },
+    ),
+    FixFieldDefinition(
+        588,
+        "LegSettlDate",
+        "LOCALMKTDATE",
+        "Leg settlement (value) date in YYYYMMDD format. Takes precedence over "
+        "LegSettlType(587) when both are present.",
+    ),
+    FixFieldDefinition(
+        609,
+        "LegSecurityType",
+        "STRING",
+        "Type of security for this leg — e.g. the near and far legs of an FX Swap are each "
+        "reported as FXFWD.",
+        {
+            "FX": "ForeignExchange",
+            "FXSPOT": "FXSpot",
+            "FXFWD": "FXForward",
+            "FXSWAP": "FXSwap",
+            "FXNDF": "FXNonDeliverableForward",
+        },
+    ),
+    FixFieldDefinition(
+        681,
+        "LegBidPx",
+        "PRICE",
+        "Bid price for this leg. For FX this is the all-in bid rate for the leg of a swap, "
+        "not the swap points.",
+    ),
+    FixFieldDefinition(
+        684,
+        "LegOfferPx",
+        "PRICE",
+        "Offer price for this leg. For FX this is the all-in offer rate for the leg of a swap, "
+        "not the swap points.",
+    ),
+    FixFieldDefinition(
+        637,
+        "LegLastPx",
+        "PRICE",
+        "Execution price assigned to this leg of a multi-leg instrument. For FX this is the "
+        "all-in rate for the leg, not the swap points.",
+    ),
     # Parties
     FixFieldDefinition(
         453,
@@ -843,6 +1004,55 @@ FIX44_TAGS: list[FixFieldDefinition] = [
             "66": "AllocatingEntity",
             "82": "PositionAccount",
             "500": "AlgoClient",
+        },
+    ),
+    FixFieldDefinition(
+        802,
+        "NoPartySubIDs",
+        "NUMINGROUP",
+        "Number of party sub-identifier entries carried for the enclosing party.",
+    ),
+    FixFieldDefinition(
+        523,
+        "PartySubID",
+        "STRING",
+        "Party sub-identifier value. Its meaning is given by the accompanying "
+        "PartySubIDType(803) — e.g. type 4025 carries the ISO 17442 LEI of the party named "
+        "in PartyID(448).",
+    ),
+    FixFieldDefinition(
+        803,
+        "PartySubIDType",
+        "INT",
+        "Type of the accompanying PartySubID(523) value. Venues extend the standard set with "
+        "private codes; Bloomberg ORP/DOR uses 4025 for an ISO 17442 LEI.",
+        {
+            "1": "FIRM",
+            "2": "PERSON",
+            "3": "SYSTEM",
+            "4": "APPLICATION",
+            "5": "FULL_LEGAL_NAME_OF_FIRM",
+            "6": "POSTAL_ADDRESS",
+            "7": "PHONE_NUMBER",
+            "8": "EMAIL_ADDRESS",
+            "9": "CONTACT_NAME",
+            "10": "SECURITIES_ACCOUNT_NUMBER",
+            "11": "REGISTRATION_NUMBER",
+            "12": "REGISTERED_ADDRESS_FOR_CONFIRMATION",
+            "13": "REGULATORY_STATUS",
+            "14": "REGISTRATION_NAME",
+            "15": "CASH_ACCOUNT_NUMBER",
+            "16": "BIC",
+            "17": "CSD_PARTICIPANT_MEMBER_CODE",
+            "18": "REGISTERED_ADDRESS",
+            "19": "FUND_ACCOUNT_NAME",
+            "20": "TELEX_NUMBER",
+            "21": "FAX_NUMBER",
+            "22": "SECURITIES_ACCOUNT_NAME",
+            "23": "CASH_ACCOUNT_NAME",
+            "24": "DEPARTMENT",
+            "25": "LOCATION_DESK",
+            "26": "POSITION_ACCOUNT_TYPE",
         },
     ),
     # Quote Request fields
