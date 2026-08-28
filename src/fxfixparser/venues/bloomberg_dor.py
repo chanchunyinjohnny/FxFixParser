@@ -43,9 +43,11 @@ _MAP_BLOOMBERG_PREFIX = "MAP_BLP"
 # 115/128 routing markers and no ApplVerID to claim on.
 _ORP_BLOOMBERG_PREFIX = "BLPORP"
 
-# Bloomberg DOR custom tag definitions for FX-specific fields.
+# Bloomberg custom tag definitions for FX-specific fields, shared by the
+# Bloomberg DOR and Bloomberg FXGO handlers — ORP/DOR, FIXBOOK, Algo (FXOM)
+# and STP are dialects of one Bloomberg tag space.
 # Standard FIX tags (e.g. 8, 35, 55, 167) are covered by FIX44.xml.
-_BLOOMBERG_CUSTOM_TAGS: dict[int, FixFieldDefinition] = {
+BLOOMBERG_CUSTOM_TAGS: dict[int, FixFieldDefinition] = {
     22913: FixFieldDefinition(
         tag=22913,
         name="LastMktSpotRate",
@@ -454,16 +456,170 @@ _BLOOMBERG_CUSTOM_TAGS: dict[int, FixFieldDefinition] = {
         field_type="PRICEOFFSET",
         description=("For FX swaps: dealer's far leg forward points, in decimal form."),
     ),
-    # Observed inside CompDealerQuoteGrp entries on MAP execution reports but
-    # not defined in the ORP 1.9.8 spec — kept as a group member so entry
-    # detection stays intact. Rename once a newer Bloomberg spec names it.
+    # CompDealerQuoteGrp members absent from the ORP 1.9.8/1.9.9 specs but
+    # documented in the Bloomberg FXGO STP FIX 4.4 spec (Rev 1.0, Table 11),
+    # which shares the same Bloomberg tag space.
     22545: FixFieldDefinition(
         tag=22545,
-        name="CompDealerQuoteField22545",
+        name="CompDealerTransactionFee",
+        field_type="AMT",
+        description=("Reports the Prime Broker fee factored into the dealer's quoted rate."),
+    ),
+    10012: FixFieldDefinition(
+        tag=10012,
+        name="CompDealerQuotePriceType",
+        field_type="INT",
+        description=(
+            "Price type of CompDealerQuotePrice (10011) and " "CompDealerFirstQuotePrice (22881)."
+        ),
+        valid_values={
+            "2": "Per unit (FX Options: pips)",
+            "103": "Percentage of premium currency (FX Options drop copy)",
+        },
+    ),
+    22481: FixFieldDefinition(
+        tag=22481,
+        name="CompDealerQuoteLegRefID",
         field_type="STRING",
         description=(
-            "Undocumented CompDealerQuoteGrp member (not in the ORP 1.9.8 "
-            "specification; observed on Bloomberg MAP execution reports)."
+            "For multi-leg trades sent as a single message: marks the "
+            "competing-quote entry as applying only to the leg whose LegID "
+            "(1788) matches."
+        ),
+    ),
+    22868: FixFieldDefinition(
+        tag=22868,
+        name="CompDealerFirstQuoteTimestamp",
+        field_type="UTCTIMESTAMP",
+        description=("Timestamp of when each participating dealer provided the first quote."),
+    ),
+    22880: FixFieldDefinition(
+        tag=22880,
+        name="CompDealerLastQuoteTimestamp",
+        field_type="UTCTIMESTAMP",
+        description=("Timestamp of when each participating dealer provided the last quote."),
+    ),
+    22881: FixFieldDefinition(
+        tag=22881,
+        name="CompDealerFirstQuotePrice",
+        field_type="PRICE",
+        description=(
+            "Dealer's first quoted price; omitted if the dealer did not "
+            "quote. For FX swaps: the near all-in swap price."
+        ),
+    ),
+    # Reference prices — RefPriceGrp (22078). Absent from the ORP 1.9.8/1.9.9
+    # specs (they appeared undocumented on MAP execution reports) but now
+    # documented in the Bloomberg FXGO STP FIX 4.4 spec (Rev 1.0, Table 58).
+    22078: FixFieldDefinition(
+        tag=22078,
+        name="NoRefPrices",
+        field_type="NUMINGROUP",
+        description="Number of reference prices in the repeating group.",
+    ),
+    22079: FixFieldDefinition(
+        tag=22079,
+        name="RefPrice",
+        field_type="PRICE",
+        description="The reference price being reported.",
+    ),
+    22080: FixFieldDefinition(
+        tag=22080,
+        name="RefPriceType",
+        field_type="INT",
+        description=(
+            "Specifies how RefPrice (22079) is expressed. May be omitted "
+            "after the first entry if subsequent prices are expressed in the "
+            "same manner."
+        ),
+        valid_values={
+            "1": "Percentage (percent of par)",
+            "2": "Per unit (FX Options: pips)",
+            "20": "Normal rate representation (e.g. FX rate)",
+        },
+    ),
+    22081: FixFieldDefinition(
+        tag=22081,
+        name="RefPriceSource",
+        field_type="INT",
+        description="Source of the reference price.",
+        valid_values={
+            "1": "Dealer's current quoted price on the trading platform",
+            "4": "User provided price (not validated by Bloomberg)",
+            "9": "Market price provided by Bloomberg",
+            "12": "Spot rate (for crosses: rate vs the third currency in RefPriceCurrencyPair)",
+        },
+    ),
+    22082: FixFieldDefinition(
+        tag=22082,
+        name="RefPriceFirmIndicator",
+        field_type="BOOLEAN",
+        description=("Whether the dealer's quoted price is firm (Y) or indicative (N)."),
+    ),
+    22083: FixFieldDefinition(
+        tag=22083,
+        name="RefPriceInventoryIndicator",
+        field_type="BOOLEAN",
+        description=(
+            "Whether the dealer has posted inventory or interest on the "
+            "trading platform at RefPrice (22079)."
+        ),
+    ),
+    22085: FixFieldDefinition(
+        tag=22085,
+        name="RefQuoteID",
+        field_type="STRING",
+        description="The dealer's QuoteID for the price shown in RefPrice (22079).",
+    ),
+    22164: FixFieldDefinition(
+        tag=22164,
+        name="RefPriceLeg2",
+        field_type="PRICE",
+        description="For FX: dealer's reference price for the second leg.",
+    ),
+    22165: FixFieldDefinition(
+        tag=22165,
+        name="RefPriceForwardPoints",
+        field_type="PRICEOFFSET",
+        description=("For FX forwards: dealer's reference forward points for the price."),
+    ),
+    22166: FixFieldDefinition(
+        tag=22166,
+        name="RefPriceSwapPoints",
+        field_type="PRICEOFFSET",
+        description="For FX swaps: dealer's reference swap points for the price.",
+    ),
+    22197: FixFieldDefinition(
+        tag=22197,
+        name="RefPriceSize",
+        field_type="QTY",
+        description=(
+            "The dealer's bid or offer inventory or interest associated with "
+            "the quoted price on the trading platform."
+        ),
+    ),
+    22198: FixFieldDefinition(
+        tag=22198,
+        name="RefPriceTime",
+        field_type="UTCTIMESTAMP",
+        description=("Time when the dealer posted its quote to the trading platform."),
+    ),
+    22513: FixFieldDefinition(
+        tag=22513,
+        name="RefPriceCurrencyPair",
+        field_type="STRING",
+        description=("Currency pair on which the RefPrice (22079) is based, e.g. EUR/USD."),
+    ),
+    # Documented in the Bloomberg FXGO STP FIX 4.4 spec; previously absent
+    # from the ORP specs and observed only on MAP execution reports.
+    22277: FixFieldDefinition(
+        tag=22277,
+        name="PriceOffset",
+        field_type="PRICEOFFSET",
+        description=(
+            "Positive or negative price spread above or below the market, as "
+            "set in the FXGO Spreadbucket. Sent to the price maker only (RFS "
+            "and Streaming flows; not used for FX Algos)."
         ),
     ),
 }
@@ -483,7 +639,7 @@ class BloombergDORHandler(VenueHandler):
     @property
     def custom_tags(self) -> list[FixFieldDefinition]:
         """Return Bloomberg DOR custom tag definitions."""
-        return list(_BLOOMBERG_CUSTOM_TAGS.values())
+        return list(BLOOMBERG_CUSTOM_TAGS.values())
 
     @property
     def enum_extensions(self) -> dict[int, dict[str, str]]:

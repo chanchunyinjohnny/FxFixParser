@@ -985,13 +985,32 @@ class TestBloombergMAPSwapExec:
         assert sub_id_types, "PartySubIDType 4047 not present in fixture"
         assert sub_id_types[0].value_description == "Liquidity taker"
 
-    def test_only_undocumented_tags_stay_unknown(self, parser):
-        """22078-22081 and 22277 are absent from the ORP 1.9.8 spec, so
-        they must stay unknown (definitions are never invented) — and
-        nothing else may be unknown."""
+    def test_no_tags_stay_unknown(self, parser):
+        """22078-22081 and 22277 were absent from the ORP 1.9.8/1.9.9 specs
+        but are documented by the Bloomberg FXGO STP FIX 4.4 spec (Rev 1.0),
+        which shares the Bloomberg tag space — so nothing in the MAP
+        execution report may be unknown any more."""
         message = parser.parse(BLOOMBERG_MAP_SWAP_EXEC, auto_detect_venue=True)
         unknown = sorted({f.tag for f in message.fields if f.definition is None})
-        assert unknown == [22078, 22079, 22080, 22081, 22277]
+        assert unknown == []
+
+    def test_ref_price_tags_decode_with_stp_spec_names(self, parser):
+        """The formerly undocumented MAP tags must now carry their FXGO STP
+        spec definitions: the RefPriceGrp members and PriceOffset."""
+        message = parser.parse(BLOOMBERG_MAP_SWAP_EXEC, auto_detect_venue=True)
+        assert message.get_field(22078).name == "NoRefPrices"
+        assert message.get_field(22079).name == "RefPrice"
+        assert message.get_field(22080).name == "RefPriceType"
+        assert message.get_field(22081).name == "RefPriceSource"
+        assert message.get_field(22277).name == "PriceOffset"
+
+    def test_comp_dealer_transaction_fee_named(self, parser):
+        """22545 must decode as CompDealerTransactionFee (the prime-broker
+        fee), not the old placeholder name."""
+        message = parser.parse(BLOOMBERG_MAP_SWAP_EXEC, auto_detect_venue=True)
+        fee = message.get_field(22545)
+        assert fee is not None
+        assert fee.name == "CompDealerTransactionFee"
 
     def test_extract_trade_swap_summary(self, handler, parser):
         """The USD/CAD swap summary must populate both legs from the 555

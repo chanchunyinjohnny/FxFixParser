@@ -170,9 +170,11 @@ BLOOMBERG_DOR_SWAP_EXEC_FULL = (
 # markers). Carries the MAP wire quirks: flat package-level regulatory ID
 # fields (1903-1906) emitted BEFORE the NoRegulatoryTradeIDs (1907) count,
 # a CompDealerQuoteGrp (10009) with reference-rate pseudo-dealers (MidRate /
-# RefRate) whose entries include the undocumented member 22545, and trailing
-# tags 22078-22081 / 22277 that no available Bloomberg spec defines (left
-# intentionally unresolved). BodyLength and CheckSum are valid.
+# RefRate) whose entries include CompDealerTransactionFee (22545), and a
+# trailing RefPriceGrp (22078-22081) plus PriceOffset (22277). Those last
+# tags are absent from the ORP 1.9.8/1.9.9 specs but documented by the
+# Bloomberg FXGO STP FIX 4.4 spec (Rev 1.0), which shares the same Bloomberg
+# tag space. BodyLength and CheckSum are valid.
 BLOOMBERG_MAP_SWAP_EXEC = (
     "8=FIX.4.4|9=1599|35=8|34=549|49=MAP_BLP_BETA|52=20260728-04:03:54|"
     "56=MAP_CLIENT_BETA|144=FX|6=1.411799|11=UDH781490411857645569|14=500000|"
@@ -1108,4 +1110,85 @@ RAW_EQUIVALENT_PARSED_REPORT_DOR_SWAP_EXEC = (
     "1903=TESTLEI00000000000AATRD0000000000001|1904=0|"
     "1905=TESTLEI00000000000AA|1906=5|2411=2|"
     "10=127|"
+)
+
+# ---------------------------------------------------------------------------
+# Bloomberg FXGO (FIXBOOK / Algo / STP) — plain FIX 4.4, Bloomberg-side
+# CompID "BLP", counterparty CompID bilaterally agreed.
+# ---------------------------------------------------------------------------
+
+# FIXBOOK Manual (RFS) two-way FX swap quote from a liquidity provider:
+# near leg all-in in BidPx(132)/OfferPx(133), far leg all-in in the custom
+# BidPx2(6050)/OfferPx2(6051), spot in 188/190, forward points in 189/191
+# (near) and 642/643 (far), SEF mid rates in MidRateNear(9518)/MidRateFar(9520).
+FXGO_RFS_SWAP_QUOTE = (
+    "8=FIX.4.4|9=0290|35=S|34=205|49=LPBANK|56=BLP|52=20260828-08:15:00|"
+    "131=RFQ20260828-77|117=Q555001|5082=2|55=EUR/USD|15=EUR|"
+    "132=1.08500|133=1.08520|188=1.08450|190=1.08470|189=0.00050|191=0.00050|"
+    "64=20260928|193=20261028|6215=1M|6216=2M|642=0.00202|643=0.00205|"
+    "6050=1.08652|6051=1.08675|9518=1.08510|9520=1.08663|"
+    "60=20260828-08:15:00|10=000|"
+)
+
+# FIXBOOK FX swap execution report (fill): near leg all-in in LastPx(31),
+# far leg all-in in the custom LastPx2(6160), fill spot in LastSpotRate(194),
+# near forward points in LastForwardPts(195).
+FXGO_SWAP_EXEC = (
+    "8=FIX.4.4|9=0250|35=8|34=88|49=LPBANK|56=BLP|52=20260828-08:20:00|"
+    "37=BB123456|11=CL789|17=EXEC001|20=0|150=F|39=2|55=USD/JPY|54=1|40=G|"
+    "15=USD|38=1000000|32=1000000|31=147.25|194=147.20|195=0.05|"
+    "6160=146.80|192=1000000|64=20260901|193=20261201|6215=1W|6216=3M|"
+    "75=20260828|60=20260828-08:20:00|5177=Tradebook|9170=CLEX-42|10=000|"
+)
+
+# FXGO Algo (FXOM) execution report — Done for day (150=3) on a multi-day
+# TWAP order, with the daily average fields and the algo strategy identifiers.
+FXGO_ALGO_EXEC = (
+    "8=FIX.4.4|9=0260|35=8|34=1201|49=BLP|56=CLIENT|52=20260828-09:00:00|"
+    "37=FXOM-99887|11=ALGO-CL-1|17=FXOM-EX-5|150=3|39=3|55=EUR/USD|54=2|40=1|"
+    "15=EUR|38=5000000|14=3000000|151=2000000|32=1000000|31=1.08461|"
+    "194=1.08455|6=1.08458|1026=1.08456|155=1.08462|156=M|"
+    "22213=TWAP|22858=BBALGO-TWAP-01|"
+    "10006=1.084585|10119=3253374|11026=1.08456|11027=0.00001|22828=1.08462|"
+    "75=20260828|60=20260828-09:00:00|64=20260901|6215=SP|22159=R|22160=R|"
+    "10=000|"
+)
+
+# FXGO STP drop-copy execution report for an FX option (vanilla call), with
+# premium, hedge, mid price, a MiscFees markup entry, a two-entry
+# RefPriceGrp, a CompDealerQuoteGrp entry with first/last quote data, a
+# Bloomberg ReferenceIDGrp entry and a RateSource group (auto expiry).
+FXGO_STP_OPTION_EXEC = (
+    "8=FIX.4.4|9=0700|35=8|34=3301|49=BLP|56=CLIENT|144=FX|"
+    "52=20260828-10:00:00|37=STP-ORD-1|11=STP-CL-1|17=STP-EX-1|150=F|39=2|"
+    "528=P|55=EUR/USD|167=OPT|201=1|9034=EUR|202=1.10000|541=20261130|"
+    "1194=0|1193=P|2141=VAN|54=1|38=10000000|32=10000000|15=EUR|31=0.0125|"
+    "75=20260828|60=20260828-10:00:00|5830=USD|5844=125000|5020=20260902|"
+    "22052=0.0124|22053=3|9015=Y|9016=1|9657=1.08500|9112=20260830|"
+    "9123=5000000|22265=EUR|6666=1|1300=BSEF|"
+    "136=1|137=25|138=USD|139=8|2216=0.0001|2713=PREMIUMMARKUP|"
+    "22078=2|"
+    "22079=0.0125|22080=2|22081=1|22082=Y|22085=QREF-1|22198=20260828-09:59:58|"
+    "22079=0.0126|22080=2|22081=9|"
+    "10009=1|"
+    "10010=DLRA|10011=0.0125|10012=2|22276=1|22868=20260828-09:59:00|"
+    "22880=20260828-09:59:55|22881=0.0127|22545=10|"
+    "22215=1|22216=7|22217=DEAL-778899|"
+    "1445=1|1446=1|1447=0|1448=EUR1|22934=Y|"
+    "10=000|"
+)
+
+# FIXBOOK batch RFQ MassQuote from a liquidity provider: a single QuoteSet
+# (296=1) for the symbol block, carrying the per-leg NoQuoteEntries (295)
+# with all-in prices per leg.
+FXGO_BATCH_MASS_QUOTE = (
+    "8=FIX.4.4|9=0400|35=i|34=52|49=LPBANK|56=BLP|52=20260828-07:00:00|"
+    "131=BRFQ-1|117=MQ-1|60=20260828-07:00:00|"
+    "296=1|302=1|55=EUR/USD|15=EUR|9112=SYM1|188=1.08450|190=1.08470|304=1|"
+    "295=2|"
+    "299=E1|654=1|600=EUR/USD|556=EUR|685=5000000|624=B|609=FXSPOT|6215=SP|"
+    "588=20260901|132=1.08500|133=1.08520|"
+    "299=E2|654=2|600=EUR/USD|556=EUR|685=5000000|624=C|609=FXFWD|6215=1M|"
+    "588=20261001|132=1.08652|133=1.08675|189=0.00152|191=0.00155|"
+    "10=000|"
 )

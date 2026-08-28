@@ -240,7 +240,12 @@ class VenueHandler(ABC):
             near_qty_str = message.get_value(32) or message.get_value(38)
             trade.near_leg_price = _to_float(near_price_str)
             trade.near_quantity = _to_float(near_qty_str)
-            far_price_str = message.get_value(640) or message.get_value(9091)
+            # Far leg price: Price2 (640), then the LFX custom far rate
+            # (9091), then LastPx2 (6160) — the far-leg all-in rate on
+            # Bloomberg FXGO (and 360T SUN 'Trade Export') execution reports.
+            far_price_str = (
+                message.get_value(640) or message.get_value(9091) or message.get_value(6160)
+            )
             far_qty_str = message.get_value(192) or message.get_value(9092)
             trade.far_leg_price = _to_float(far_price_str)
             trade.far_quantity = _to_float(far_qty_str)
